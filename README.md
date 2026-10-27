@@ -39,7 +39,18 @@ and every outbound request is **SSRF-guarded** — private, loopback and
 link-local addresses are refused on every redirect hop. Keys are **never
 stored** — only the project ID, the score and the findings are saved.
 
-> ⚠️ Scan only Firebase projects you own or are explicitly authorized to test.
+> ⚠️ Scan only projects you own or are explicitly authorized to test.
+
+**Passive by default.** Without `"authorized": true` (the *“This is my project”*
+checkbox in the UI) only read-only checks run — no test writes, no sign-ups.
+Scans started from the Telegram chat are always passive.
+
+**Abuse limits** (env): `SCAN_PER_MIN` (5) and `SCAN_PER_HOUR` (30) per IP /
+Telegram user, `SCAN_CONCURRENCY` (3) scans at once, `SCAN_HARD_TIMEOUT` (75 s).
+
+**Keep Render awake:** `.github/workflows/keepalive.yml` pings `/api/health`
+every 10 min. Set the repo variable `VG_URL` (Settings → Secrets and variables →
+Actions → Variables) to your app URL.
 
 ## Free vs paid
 

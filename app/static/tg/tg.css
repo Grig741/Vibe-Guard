@@ -231,3 +231,9 @@ textarea:focus, .inp:focus { outline: none; border-color: var(--accent); box-sha
 .mode-tab.active{background:rgba(94,234,212,.16);color:var(--accent,#5eead4)}
 .stack-row{display:flex;flex-wrap:wrap;gap:5px;margin-top:8px;justify-content:center}
 .stack-badge{font:600 10px/1 var(--mono,monospace);padding:4px 7px;border-radius:999px;background:rgba(94,234,212,.12);color:var(--accent,#5eead4);border:1px solid rgba(94,234,212,.25)}
+
+/* Ownership checkbox + skipped-tests note */
+.own-check{display:flex;gap:10px;align-items:flex-start;margin:12px 0 14px;padding:10px 12px;border-radius:12px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);font-size:12.5px;line-height:1.45;color:var(--muted,#9ab);cursor:pointer}
+.own-check input{margin-top:2px;width:16px;height:16px;accent-color:#5eead4;flex:none}
+.own-check b{color:#e6f1f5}
+.active-note{margin:12px 0 4px;padding:10px 12px;border-radius:12px;background:rgba(251,191,36,.08);border:1px solid rgba(251,191,36,.25);color:#f5d68a;font-size:12.5px;line-height:1.45}

@@ -206,7 +206,7 @@
     steps.forEach((s) => s.className = "");
 
     let done = false, result = null, error = null;
-    const body = { label: $("#label").value.trim() || null };
+    const body = { label: $("#label").value.trim() || null, authorized: !!($("#ownCheck") && $("#ownCheck").checked) };
     if (target.kind === "config") body.config = target.config;
     else body.target = target.url || target.raw;
     const key = getKey();
@@ -278,7 +278,8 @@
         <div class="sev m"><b>${s.medium}</b><small>Med</small></div>
         <div class="sev l"><b>${s.low}</b><small>Low</small></div>
         <div class="sev p"><b>${s.passed}</b><small>Pass</small></div>
-      </div>`;
+      </div>
+      ${s.active_skipped ? `<div class="active-note">ℹ️ ${s.active_skipped} write/sign-up test${s.active_skipped === 1 ? "" : "s"} didn't run. Tick <b>“This is my project”</b> and scan again for the full check.</div>` : ""}`;
 
     html += s.locked ? lockedHTML(s) : fullHTML(s);
     $("#result").innerHTML = html;

@@ -42,6 +42,10 @@
         <b>URL:</b> just your app's web address. <b>Config:</b> Firebase console → ⚙ Project settings → Your apps → Config, or your Supabase <code>createClient(url, anonKey)</code> line.
       </div>
       <input id="label" class="inp" type="text" placeholder="Label (optional) — e.g. My app · prod" maxlength="80" />
+      <label class="own-check" for="ownCheck">
+        <input type="checkbox" id="ownCheck" />
+        <span><b>This is my project</b> — also run active tests (test write, throwaway sign-up). Otherwise only read-only checks.</span>
+      </label>
     </div>
 
     <div class="checks-mini in">

@@ -38,12 +38,12 @@ _HEADERS = {
 # Public entrypoints
 # ---------------------------------------------------------------------------
 
-async def run_scan(cfg: FirebaseConfig, extra_collections: list[str]) -> dict:
+async def run_scan(cfg: FirebaseConfig, extra_collections: list[str], active: bool = False) -> dict:
     """Firebase scan (kept for the existing /api/scan config path)."""
-    return await scan_firebase(cfg, extra_collections)
+    return await scan_firebase(cfg, extra_collections, active)
 
 
-async def scan_firebase(cfg: FirebaseConfig, extra_collections: list[str]) -> dict:
+async def scan_firebase(cfg: FirebaseConfig, extra_collections: list[str], active: bool = False) -> dict:
     started = time.perf_counter()
 
     if (cfg.projectId or "").strip().lower() == "vibeguard-demo":
@@ -56,10 +56,10 @@ async def scan_firebase(cfg: FirebaseConfig, extra_collections: list[str]) -> di
         async with httpx.AsyncClient(headers=_HEADERS, timeout=timeout,
                                      limits=httpx.Limits(max_connections=10),
                                      follow_redirects=True) as client:
-            fs = await checks.check_firestore(client, cfg, extra_collections)
-            rtdb = await checks.check_rtdb(client, cfg)
+            fs = await checks.check_firestore(client, cfg, extra_collections, active)
+            rtdb = await checks.check_rtdb(client, cfg, active)
             storage = await checks.check_storage(client, cfg)
-            auth = await checks.check_auth(client, cfg)
+            auth = await checks.check_auth(client, cfg, active)
             raw = fs + rtdb + storage + auth
     except Exception as exc:  # noqa: BLE001
         error = str(exc)[:500]
@@ -68,7 +68,7 @@ async def scan_firebase(cfg: FirebaseConfig, extra_collections: list[str]) -> di
                      error=error, stack=["Firebase"])
 
 
-async def scan_supabase(sb: SupabaseFound) -> dict:
+async def scan_supabase(sb: SupabaseFound, active: bool = False) -> dict:
     started = time.perf_counter()
     raw: list[dict] = []
     error = None
@@ -77,14 +77,14 @@ async def scan_supabase(sb: SupabaseFound) -> dict:
         async with httpx.AsyncClient(timeout=timeout,
                                      limits=httpx.Limits(max_connections=10),
                                      follow_redirects=True) as client:
-            raw = await sb_checks.check_supabase(client, sb)
+            raw = await sb_checks.check_supabase(client, sb, active)
     except Exception as exc:  # noqa: BLE001
         error = str(exc)[:500]
     return _assemble(sb.ref or "supabase", "supabase", raw, started,
                      error=error, stack=["Supabase"])
 
 
-async def scan_url(raw_url: str) -> dict:
+async def scan_url(raw_url: str, active: bool = False) -> dict:
     """Fetch a live site and run every applicable check."""
     started = time.perf_counter()
     try:
@@ -142,14 +142,14 @@ async def scan_url(raw_url: str) -> dict:
                     stack.append("Firebase")
                 cfg = FirebaseConfig(**fb.as_config())
                 cols = _collections_from(site)
-                raw += await checks.check_firestore(probe, cfg, cols)
-                raw += await checks.check_rtdb(probe, cfg)
+                raw += await checks.check_firestore(probe, cfg, cols, active)
+                raw += await checks.check_rtdb(probe, cfg, active)
                 raw += await checks.check_storage(probe, cfg)
-                raw += await checks.check_auth(probe, cfg)
+                raw += await checks.check_auth(probe, cfg, active)
             if sb and (sb.anon_key or sb.service_key):
                 if "Supabase" not in stack:
                     stack.append("Supabase")
-                raw += await sb_checks.check_supabase(probe, sb)
+                raw += await sb_checks.check_supabase(probe, sb, active)
 
         # --- passive website checks (always) ---
         raw += webchecks.check_headers(site)

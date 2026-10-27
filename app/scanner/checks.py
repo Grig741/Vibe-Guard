@@ -28,8 +28,11 @@ def _r(check_id: str, status: str, evidence: str = "") -> dict:
 
 # --- Firestore ----------------------------------------------------------------
 
+ACTIVE_SKIP = "Active test — tick “This is my project” to run write/sign-up probes."
+
+
 async def check_firestore(client: httpx.AsyncClient, cfg: FirebaseConfig,
-                          extra_collections: list[str]) -> list[dict]:
+                          extra_collections: list[str], active: bool = True) -> list[dict]:
     pid = cfg.projectId
     key = cfg.apiKey
     base = f"https://firestore.googleapis.com/v1/projects/{pid}/databases/(default)/documents"
@@ -76,6 +79,9 @@ async def check_firestore(client: httpx.AsyncClient, cfg: FirebaseConfig,
         ))
 
     # ---- public WRITE ----
+    if not active:
+        results.append(_r("firestore_public_write", "skipped", ACTIVE_SKIP))
+        return results
     write_url = f"{base}/{PROBE_PATH}{keyq}"
     payload = {"fields": {"vibeguard": {"stringValue": "probe"}}}
     try:
@@ -122,7 +128,8 @@ def _rtdb_base(cfg: FirebaseConfig) -> Optional[str]:
     return None
 
 
-async def check_rtdb(client: httpx.AsyncClient, cfg: FirebaseConfig) -> list[dict]:
+async def check_rtdb(client: httpx.AsyncClient, cfg: FirebaseConfig,
+                     active: bool = True) -> list[dict]:
     base = _rtdb_base(cfg)
     results: list[dict] = []
     if not base:
@@ -160,6 +167,9 @@ async def check_rtdb(client: httpx.AsyncClient, cfg: FirebaseConfig) -> list[dic
     # ---- WRITE ----
     if not provisioned:
         results.append(_r("rtdb_public_write", "skipped", "No RTDB instance to probe."))
+        return results
+    if not active:
+        results.append(_r("rtdb_public_write", "skipped", ACTIVE_SKIP))
         return results
 
     ts = int(time.time() * 1000)
@@ -248,7 +258,8 @@ async def _delete_user(client: httpx.AsyncClient, key: str, id_token: str) -> bo
         return False
 
 
-async def check_auth(client: httpx.AsyncClient, cfg: FirebaseConfig) -> list[dict]:
+async def check_auth(client: httpx.AsyncClient, cfg: FirebaseConfig,
+                     active: bool = True) -> list[dict]:
     key = cfg.apiKey
     results: list[dict] = []
     if not key:
@@ -278,6 +289,52 @@ async def check_auth(client: httpx.AsyncClient, cfg: FirebaseConfig) -> list[dic
         except Exception:  # noqa: BLE001
             return {}
 
+    if not active:
+        # Passive: no accounts are created. createAuthUri only asks which sign-in
+        # methods exist for a made-up address — enough to see if the key is restricted.
+        results.append(_r("auth_open_signup", "skipped", ACTIVE_SKIP))
+        results.append(_r("auth_anonymous_open", "skipped", ACTIVE_SKIP))
+        try:
+            resp = await client.post(
+                f"{IDENTITY}:createAuthUri?key={key}",
+                json={"identifier": f"vibeguard_{secrets.token_hex(6)}@vibeguard-probe.invalid",
+                      "continueUri": "https://vibeguard.invalid/"},
+            )
+            body = _parse(resp)
+            msg = (body.get("error", {}) or {}).get("message", "")
+            if "API_KEY_HTTP_REFERRER_BLOCKED" in msg or "requests-from-referer" in msg.lower():
+                referrer_blocked = True
+                got_google_response = True
+            elif _is_google_body(body):
+                got_google_response = True
+        except Exception:  # noqa: BLE001
+            pass
+    else:
+        referrer_blocked, got_google_response = await _auth_active(
+            client, key, results, _parse, _is_google_body)
+
+    # ---- API key referrer restriction ----
+    if referrer_blocked:
+        results.append(_r("apikey_unrestricted", "ok",
+                          "API key rejected server-side requests (referrer-restricted)."))
+    elif got_google_response:
+        results.append(_r(
+            "apikey_unrestricted", "vulnerable",
+            "API key accepted requests from a non-browser origin (no referrer restriction).",
+        ))
+    else:
+        results.append(_r(
+            "apikey_unrestricted", "skipped",
+            "Could not reach the auth endpoint to test the API key.",
+        ))
+    return results
+
+
+async def _auth_active(client, key, results, _parse, _is_google_body) -> tuple[bool, bool]:
+    """Sign-up probes: create a throwaway user (deleted right after).
+    Returns (referrer_blocked, got_google_response)."""
+    referrer_blocked = False
+    got_google_response = False
     # ---- Email/password sign-up open? (creates + deletes a throwaway user) ----
     probe_email = f"vibeguard_{secrets.token_hex(8)}@vibeguard-probe.invalid"
     probe_pass = secrets.token_urlsafe(16)
@@ -343,20 +400,4 @@ async def check_auth(client: httpx.AsyncClient, cfg: FirebaseConfig) -> list[dic
     except Exception as exc:  # noqa: BLE001
         results.append(_r("auth_anonymous_open", "error", str(exc)[:200]))
 
-    # ---- API key referrer restriction ----
-    if referrer_blocked:
-        results.append(_r("apikey_unrestricted", "ok",
-                          "API key rejected server-side requests (referrer-restricted)."))
-    elif got_google_response:
-        results.append(_r(
-            "apikey_unrestricted", "vulnerable",
-            "API key accepted requests from a non-browser origin (no referrer restriction).",
-        ))
-    else:
-        # Never reached Google (network/proxy error). Don't guess.
-        results.append(_r(
-            "apikey_unrestricted", "skipped",
-            "Could not reach the auth endpoint to test the API key.",
-        ))
-
-    return results
+    return referrer_blocked, got_google_response

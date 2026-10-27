@@ -325,20 +325,33 @@ async def _maybe_scan_in_chat(db: Session, chat_id: int, user_id: int, text: str
     if t == "unknown":
         return False
 
+    import asyncio
+    from .ratelimit import SCAN_HARD_TIMEOUT, SCAN_SLOTS, limiter
+    if t == "supabase" and not (kind["supabase"].anon_key or kind["supabase"].service_key):
+        return False
+    wait = limiter.hit(f"tg:{user_id}")
+    if wait:
+        await _send(chat_id, f"⏳ Too many scans — try again in {wait} s.", with_button=False)
+        return True
+
     await safe_call("sendChatAction", chat_id=chat_id, action="typing")
-    try:
+
+    async def _run() -> dict:
+        # Chat scans are passive: no test writes or sign-ups. The full active scan
+        # needs the "This is my project" confirmation in the app.
         if t == "url":
-            result = await scan_url(kind["url"])
-        elif t == "supabase":
-            sb = kind["supabase"]
-            if not (sb.anon_key or sb.service_key):
-                return False
-            result = await scan_supabase(sb)
-        else:  # firebase
-            result = await scan_firebase(FirebaseConfig(**kind["firebase"].as_config()), [])
+            return await scan_url(kind["url"])
+        if t == "supabase":
+            return await scan_supabase(kind["supabase"])
+        return await scan_firebase(FirebaseConfig(**kind["firebase"].as_config()), [])
+
+    try:
+        async with SCAN_SLOTS:
+            result = await asyncio.wait_for(_run(), timeout=SCAN_HARD_TIMEOUT)
     except Exception as exc:  # noqa: BLE001
         log.warning("in-chat scan failed: %s", exc)
-        return False
+        await _send(chat_id, "⚠️ The scan didn't finish. Try again in a minute.", with_button=False)
+        return True
 
     # A Telegram user with an active key gets the scan unlocked automatically.
     lic = user_license(db, user_id)
@@ -383,6 +396,12 @@ async def _send_scan_summary(chat_id: int, scan: models.Scan, issues: int) -> No
     if scan.low: bars.append(f"⚪ {scan.low} low")
     body = "\n".join(bars) if bars else "✅ No exposures found in the checks that ran."
     grade_line = f"Grade <b>{scan.grade}</b> · {scan.score}/100"
+
+    skipped = sum(1 for f in scan.findings
+                  if f.status == "skipped" and (f.evidence or "").startswith("Active test"))
+    if skipped:
+        body += (f"\n\nℹ️ {skipped} write/sign-up test{'s' if skipped != 1 else ''} not run from chat. "
+                 "Open the app and tick <b>“This is my project”</b> for the full check.")
 
     if scan.unlocked:
         text = f"{head}\n\n{grade_line}\n{body}\n\nTap below for the full report with fixes."

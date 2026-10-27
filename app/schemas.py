@@ -27,6 +27,9 @@ class ScanRequest(BaseModel):
     label: Optional[str] = None
     # If a valid license key is sent, the scan comes back fully unlocked.
     license_key: Optional[str] = None
+    # The user confirmed they own the project → run active probes (test write,
+    # throwaway sign-up). Without it only read-only / passive checks run.
+    authorized: bool = False
 
 
 class UnlockRequest(BaseModel):
@@ -71,6 +74,7 @@ class ScanDetail(ScanSummary):
     issues: int = 0                 # number of vulnerabilities found
     locked: bool = True
     stack: List[str] = Field(default_factory=list)
+    active_skipped: int = 0          # active tests not run (no ownership confirmation)
     findings: List[FindingOut] = Field(default_factory=list)
 
 

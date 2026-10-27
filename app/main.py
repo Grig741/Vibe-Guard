@@ -39,6 +39,7 @@ from .config import (
     TG_WEBHOOK_SECRET,
 )
 from .database import SessionLocal, get_db, init_db
+from .ratelimit import SCAN_HARD_TIMEOUT, SCAN_SLOTS, client_ip, limiter
 from .scanner import scan_firebase, scan_supabase, scan_url
 from .scanner.detect import classify_input
 from .schemas import (
@@ -78,6 +79,8 @@ def _serialize(scan: models.Scan) -> dict:
         "issues": issues,
         "locked": not scan.unlocked,
         "stack": [s for s in (scan.stack or "").split(",") if s],
+        "active_skipped": sum(1 for f in scan.findings
+                              if f.status == "skipped" and (f.evidence or "").startswith("Active test")),
         "findings": [],
     })
     if scan.unlocked:
@@ -94,9 +97,10 @@ def _serialize(scan: models.Scan) -> dict:
 
 async def _dispatch_scan(req: ScanRequest) -> dict:
     """Route a scan request to the right scanner based on what was sent."""
+    active = bool(req.authorized)
     # Explicit firebaseConfig (API, or the classic Firebase path).
     if req.config is not None and req.config.projectId:
-        return await scan_firebase(req.config, req.collections)
+        return await scan_firebase(req.config, req.collections, active)
 
     raw = (req.target or "").strip()
     if not raw:
@@ -110,7 +114,7 @@ async def _dispatch_scan(req: ScanRequest) -> dict:
     kind = classify_input(raw)
     t = kind["type"]
     if t == "url":
-        return await scan_url(kind["url"])
+        return await scan_url(kind["url"], active)
     if t == "supabase":
         sb = kind["supabase"]
         if not (sb.anon_key or sb.service_key):
@@ -118,11 +122,11 @@ async def _dispatch_scan(req: ScanRequest) -> dict:
             raise HTTPException(status_code=422,
                                 detail="Found a Supabase URL but no anon key. Paste the "
                                        "createClient(url, anonKey) line, or just give me your site URL.")
-        return await scan_supabase(sb)
+        return await scan_supabase(sb, active)
     if t == "firebase":
         fb = kind["firebase"]
         from .schemas import FirebaseConfig
-        return await scan_firebase(FirebaseConfig(**fb.as_config()), req.collections)
+        return await scan_firebase(FirebaseConfig(**fb.as_config()), req.collections, active)
     raise HTTPException(status_code=422,
                         detail="Couldn't tell what that is. Paste your site URL, your "
                                "firebaseConfig object, or your Supabase URL + anon key.")
@@ -204,8 +208,14 @@ def pricing() -> dict:
 
 
 @app.post("/api/scan", response_model=ScanDetail)
-async def create_scan(req: ScanRequest, db: Session = Depends(get_db),
+async def create_scan(req: ScanRequest, request: Request, db: Session = Depends(get_db),
                       user: dict | None = Depends(tg_user)) -> dict:
+    # Abuse guard: per-IP (or per-Telegram-user) rate limit.
+    who = f"tg:{user['id']}" if user else f"ip:{client_ip(request)}"
+    wait = limiter.hit(who)
+    if wait:
+        raise HTTPException(status_code=429, detail=f"Too many scans — try again in {wait} s.",
+                            headers={"Retry-After": str(wait)})
     # Pick a license BEFORE spending time on the scan: an explicit key wins,
     # otherwise a Telegram user's own paid license is used automatically.
     lic = None
@@ -216,7 +226,11 @@ async def create_scan(req: ScanRequest, db: Session = Depends(get_db),
 
     # Decide what to scan: an explicit firebaseConfig, or the smart `target`
     # string (a URL, or Supabase URL + anon key, or a pasted config).
-    result = await _dispatch_scan(req)
+    async with SCAN_SLOTS:
+        try:
+            result = await asyncio.wait_for(_dispatch_scan(req), timeout=SCAN_HARD_TIMEOUT)
+        except asyncio.TimeoutError:
+            raise HTTPException(status_code=504, detail="The scan took too long. Try again in a minute.")
 
     scan = models.Scan(
         project_id=result["project_id"],

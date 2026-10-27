@@ -157,7 +157,8 @@ function buildBody() {
   if (!target) return null;
   const collections = els.collections.value.split(",").map((c) => c.trim()).filter(Boolean);
   const label = els.label.value.trim() || null;
-  const base = { collections, label };
+  const own = $("#ownCheck");
+  const base = { collections, label, authorized: !!(own && own.checked) };
   if (target.kind === "config") base.config = target.config;
   else if (target.kind === "url") base.target = target.url;
   else base.target = target.raw;
@@ -267,7 +268,8 @@ function reportHeader(s) {
       ${sevPill("med", s.medium, "Medium")}
       ${sevPill("low", s.low, "Low")}
       ${sevPill("pass", s.passed, "Passed")}
-    </div>`;
+    </div>
+    ${s.active_skipped ? `<div class="active-note">ℹ️ ${s.active_skipped} active test${s.active_skipped === 1 ? "" : "s"} (write / sign-up) didn't run. Tick <b>“This is my project”</b> and re-scan for the full check.</div>` : ""}`;
 }
 
 function renderReport(s) {
@@ -326,7 +328,7 @@ function lockedBody(s) {
     <div class="blurred">${fakes}</div>
     <div class="unlock-box">
       <h3>See every hole and how to close it</h3>
-      <p>The full report shows exactly what's exposed and gives copy-paste fixes for your Firebase rules.</p>
+      <p>The full report shows exactly what's exposed and gives copy-paste fixes${fixTarget(s)}.</p>
       <ul class="unlock-perks">
         <li>What each hole is and what an attacker can do with it</li>
         <li>Proof from the scan (the exact request that got through)</li>
@@ -339,6 +341,16 @@ function lockedBody(s) {
         <button class="ghost-btn" id="unlockBtn">Unlock</button>
       </div>
     </div>`;
+}
+
+function fixTarget(s) {
+  const st = (s.stack || []).map((x) => x.toLowerCase());
+  const fb = st.includes("firebase") || s.scan_type === "firebase";
+  const sb = st.includes("supabase") || s.scan_type === "supabase";
+  if (fb && sb) return " — Firebase rules, Supabase RLS policies and more";
+  if (sb) return " — ready-to-paste Supabase RLS policies and more";
+  if (fb) return " — ready-to-paste Firebase security rules and more";
+  return " for every issue";
 }
 
 function payCtx() {

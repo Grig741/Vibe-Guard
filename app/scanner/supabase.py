@@ -27,7 +27,11 @@ def _headers(anon: str) -> dict:
     return {"apikey": anon, "Authorization": f"Bearer {anon}"}
 
 
-async def check_supabase(client: httpx.AsyncClient, sb: SupabaseFound) -> list[dict]:
+ACTIVE_SKIP = "Active test — tick “This is my project” to run the write probe."
+
+
+async def check_supabase(client: httpx.AsyncClient, sb: SupabaseFound,
+                         active: bool = True) -> list[dict]:
     results: list[dict] = []
     base = (sb.url or "").rstrip("/")
     anon = sb.anon_key
@@ -88,7 +92,9 @@ async def check_supabase(client: httpx.AsyncClient, sb: SupabaseFound) -> list[d
 
     # ---- RLS on writes: can the anon key INSERT? (self-cleaning) ----
     write_target = read_hit[0] if read_hit else (sb.tables[0] if sb.tables else None)
-    if write_target:
+    if write_target and not active:
+        results.append(_r("supabase_rls_write", "skipped", ACTIVE_SKIP))
+    elif write_target:
         marker = f"__vibeguard_{secrets.token_hex(6)}"
         try:
             resp = await client.post(
