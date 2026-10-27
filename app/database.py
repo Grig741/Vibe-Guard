@@ -4,9 +4,12 @@ import logging
 from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.orm import declarative_base, sessionmaker
 
-from .config import DATABASE_URL
+from .config import DATABASE_URL, DATABASE_URL_ERROR
 
 log = logging.getLogger("vibeguard.db")
+if DATABASE_URL_ERROR:
+    logging.basicConfig(level=logging.INFO)
+    log.error(DATABASE_URL_ERROR)
 
 # SQLite needs check_same_thread=False when used across FastAPI's threadpool.
 connect_args = {"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {}

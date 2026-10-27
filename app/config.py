@@ -18,9 +18,19 @@ def _normalize_db_url(url: str) -> str:
     return url
 
 
-# Database. Falls back to a local SQLite file when DATABASE_URL is unset.
-DATABASE_URL = _normalize_db_url(os.getenv("DATABASE_URL", "").strip()) \
-    or "sqlite:///./vibeguard.db"
+# Database. Falls back to a local SQLite file when DATABASE_URL is unset or invalid.
+_raw_db = _normalize_db_url(os.getenv("DATABASE_URL", "").strip())
+DATABASE_URL_ERROR = ""
+if _raw_db and not _raw_db.startswith(("postgresql", "sqlite")):
+    # Common mistake: pasting the Supabase *project* URL (https://xxx.supabase.co)
+    # instead of the Postgres connection string. Don't crash — warn and use SQLite.
+    DATABASE_URL_ERROR = (
+        "DATABASE_URL is not a Postgres connection string (got '%s…'). "
+        "Use Supabase → Connect → Session pooler: postgresql://postgres.xxx:PASSWORD@aws-0-….pooler.supabase.com:5432/postgres. "
+        "Falling back to temporary SQLite — data will be lost on restart!" % _raw_db[:30]
+    )
+    _raw_db = ""
+DATABASE_URL = _raw_db or "sqlite:///./vibeguard.db"
 
 # Scanner tuning
 SCAN_TIMEOUT = float(os.getenv("SCAN_TIMEOUT", "8"))
