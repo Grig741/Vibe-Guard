@@ -18,7 +18,7 @@ services:
         sync: false
       - key: SUPPORT_CONTACT     # e.g. @your_username
         sync: false
-      - key: MANUAL_DETAILS      # your card / bank / wallet details shown to buyers (\n = new line)
+      - key: MANUAL_DETAILS      # optional: fixed details on the site. Empty = you reply with details in the bot
         sync: false
       - key: ADMIN_TG_ID         # your Telegram ID (send /myid to the bot) — manual payments come here
         sync: false

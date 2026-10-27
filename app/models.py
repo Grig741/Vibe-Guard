@@ -101,6 +101,9 @@ class Order(Base):
     mini_app_url = Column(Text, nullable=True)
     contact = Column(String(255), nullable=True)            # buyer contact (manual)
     note = Column(Text, nullable=True)                      # tx hash / payer name (manual)
+    details = Column(Text, nullable=True)                   # requisites the admin sent for this order
+    admin_msg_id = Column(BigInteger, nullable=True, index=True)  # admin's notification message (reply → details)
+    buyer_paid = Column(Boolean, default=False, server_default="0", nullable=False)  # buyer pressed "I've paid"
     license_key = Column(String(64), nullable=True)
     created_at = Column(DateTime(timezone=True), default=_now, index=True, nullable=False)
 

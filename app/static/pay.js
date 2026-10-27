@@ -80,7 +80,12 @@ window.VGPay = (() => {
     if (m.manual) opts.push(`
       <button class="vgp-opt" data-m="manual">
         <span class="vgp-ico">🏦</span>
-        <span class="vgp-ot"><b>Card / bank / crypto wallet</b><small>Transfer to our details · confirmed manually</small></span>
+        <span class="vgp-ot"><b>Card / bank / crypto wallet</b><small>${p.manual_mode === "relay" ? "We send you payment details · confirmed manually" : "Transfer to our details · confirmed manually"}</small></span>
+        <span class="vgp-price">$${esc(usd)}</span></button>`);
+    if (m.contact && p.contact_url) opts.push(`
+      <button class="vgp-opt" data-m="contact">
+        <span class="vgp-ico">💬</span>
+        <span class="vgp-ot"><b>Card, bank or crypto</b><small>Message ${esc(p.support)} — you'll get the payment details</small></span>
         <span class="vgp-price">$${esc(usd)}</span></button>`);
     if (m.crypto) opts.push(`
       <button class="vgp-opt crypto" data-m="crypto">
@@ -112,7 +117,8 @@ window.VGPay = (() => {
       if (!opt) return;
       h("tap");
       const kind = opt.dataset.m;
-      if (kind === "manual") manualView();
+      if (kind === "manual") (p.manual_mode === "relay" ? relayStart() : manualView());
+      if (kind === "contact") contactView();
       if (kind === "crypto") cryptoStart();
       if (kind === "stars") { close(); ctx.onStars(); }
       if (kind === "link") { window.open(p.payment_url, "_blank", "noopener"); ctx.toast("After paying you'll get a key — enter it under the report"); close(); }
@@ -161,6 +167,79 @@ window.VGPay = (() => {
     });
   }
 
+  /* --- contact the seller (details sent personally) --- */
+  function contactView() {
+    const p = pricing;
+    const msg = `Hi! I'd like the VibeGuard full report ($${p.price_usd || "9"}).`;
+    const b = body(`
+      <button class="vgp-back">← Back</button>
+      <h3 class="vgp-h">Pay by card, bank or crypto</h3>
+      <p class="vgp-sub">Message us — we'll send the payment details. After you pay, you get a key for <b>${esc(p.pack_scans || 10)} full scans</b>.</p>
+      <div class="vgp-amount"><span>Amount</span><b>$${esc(p.price_usd || "9")}</b></div>
+      <div class="vgp-details"><button class="vgp-copy">Copy</button>${esc(msg)}</div>
+      <p class="vgp-hint">Copy this message and send it to ${esc(p.support)}.</p>
+      <button class="vgp-btn" id="vgpWrite">Message ${esc(p.support)}</button>
+      ${ctx.onHaveKey ? `<button class="vgp-link" id="vgpGotKey">I've got my key →</button>` : ""}`);
+    b.querySelector(".vgp-back").addEventListener("click", () => open(scan, ctx));
+    b.querySelector(".vgp-copy").addEventListener("click", () => copy(msg));
+    b.querySelector("#vgpWrite").addEventListener("click", () => {
+      h("tap");
+      try { navigator.clipboard.writeText(msg); } catch (_) {}
+      const url = p.contact_url;
+      try {
+        if (ctx.inTG && ctx.tg && url.startsWith("https://t.me/")) { ctx.tg.openTelegramLink(url); return; }
+      } catch (_) {}
+      window.open(url, "_blank", "noopener");
+    });
+    const gk = b.querySelector("#vgpGotKey");
+    if (gk) gk.addEventListener("click", () => { close(); ctx.onHaveKey(); });
+  }
+
+  /* --- relay: request details, admin sends them through the bot --- */
+  let stage = null; // "details-wait" | "details" | "confirm"
+  async function relayStart() {
+    body(`<div class="vgp-wait"><div class="vgp-spin"></div><h3>Requesting payment details…</h3></div>`);
+    try {
+      const o = await ctx.api("/api/pay/manual", { method: "POST", body: JSON.stringify({ scan_id: scan.id }) });
+      store.set({ id: o.id, scan_id: scan.id, method: "manual" });
+      h("ok");
+      if (o.details && !o.buyer_paid) detailsView(o);
+      else waitView(o, "manual");
+    } catch (ex) {
+      h("err");
+      if (ex.status === 409) { close(); ctx.onPaid(scan.id, null); return; }
+      ctx.toast(ex.message, true);
+      open(scan, ctx);
+    }
+  }
+
+  function detailsView(o) {
+    if (!overlay) mount();
+    stage = "details";
+    const b = body(`
+      <h3 class="vgp-h">Payment details</h3>
+      <p class="vgp-sub">Send the amount using the details below, then tell us how you paid.</p>
+      <div class="vgp-amount"><span>Amount</span><b>$${esc(o.amount)}</b></div>
+      <div class="vgp-details"><button class="vgp-copy">Copy</button>${esc(o.details)}</div>
+      <label class="vgp-lbl" for="vgpNote">Payment proof</label>
+      <input class="vgp-inp" id="vgpNote" placeholder="Tx hash, or card last 4 digits + payer name" autocomplete="off" />
+      ${ctx.inTG ? `<p class="vgp-hint" style="margin-top:8px">Or just send a screenshot to the bot chat.</p>` : ""}
+      <button class="vgp-btn" id="vgpPaid">I've paid</button>
+      <p class="vgp-err" id="vgpErr"></p>`);
+    b.querySelector(".vgp-copy").addEventListener("click", () => copy(o.details || ""));
+    b.querySelector("#vgpPaid").addEventListener("click", async (e) => {
+      const btn = e.currentTarget, note = b.querySelector("#vgpNote").value.trim(), err = b.querySelector("#vgpErr");
+      if (!note) { h("err"); err.textContent = "Add the tx hash or the card's last 4 digits + payer name."; return; }
+      btn.disabled = true;
+      try {
+        const r = await ctx.api(`/api/pay/order/${o.id}/paid`, { method: "POST", body: JSON.stringify({ note }) });
+        h("ok");
+        waitView(r, "manual");
+      } catch (ex) { btn.disabled = false; h("err"); err.textContent = ex.message; }
+    });
+    startPoll(o.id, 6000);
+  }
+
   /* --- crypto (CryptoBot) --- */
   async function cryptoStart() {
     body(`<div class="vgp-wait"><div class="vgp-spin"></div><h3>Creating invoice…</h3></div>`);
@@ -189,6 +268,21 @@ window.VGPay = (() => {
   function waitView(o, method) {
     if (!overlay) mount();
     const manual = method === "manual";
+    const needDetails = manual && !o.details && !o.buyer_paid;
+    stage = needDetails ? "details-wait" : "confirm";
+    if (needDetails) {
+      const bd = body(`
+        <div class="vgp-wait">
+          <div class="vgp-spin"></div>
+          <h3>Waiting for payment details</h3>
+          <p>${ctx.inTG ? "We'll send the details to this chat and here — usually within minutes."
+                        : "Keep this page open — the details will appear here, usually within minutes. You can also come back later."}</p>
+        </div>
+        <button class="vgp-link" id="vgpLater">Close — I'll come back</button>`);
+      bd.querySelector("#vgpLater").addEventListener("click", () => close());
+      startPoll(o.id, 4000);
+      return;
+    }
     const b = body(`
       <div class="vgp-wait">
         <div class="vgp-spin"></div>
@@ -233,6 +327,7 @@ window.VGPay = (() => {
       try {
         const o = await ctx.api("/api/pay/order/" + orderId);
         if (o.status === "paid") { store.del(); doneView(o.scan_id, o.license_key); return; }
+        if (o.method === "manual" && o.details && !o.buyer_paid && stage !== "details") { h("ok"); detailsView(o); return; }
         if (o.status === "rejected" || o.status === "expired") {
           store.del();
           h("err");
@@ -258,6 +353,7 @@ window.VGPay = (() => {
       const o = await ctx.api("/api/pay/order/" + id);
       scan = { id: o.scan_id };
       if (o.status === "paid") { store.del(); doneView(o.scan_id, o.license_key); }
+      else if (o.status === "pending" && o.method === "manual" && o.details && !o.buyer_paid) { mount(); detailsView(o); }
       else if (o.status === "pending") { mount(); waitView(o, o.method); }
       else store.del();
     } catch (_) { store.del(); }

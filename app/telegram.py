@@ -152,6 +152,10 @@ async def create_invoice_link(scan_id: str, tg_user_id: int) -> str:
 
 # ---- Webhook -----------------------------------------------------------------
 
+def open_app_markup(text: str = "🛡 Open VibeGuard") -> dict | None:
+    return _open_app_markup(text)
+
+
 def _open_app_markup(text: str = "🛡 Open VibeGuard") -> dict | None:
     url = webapp_url()
     if not url:
@@ -232,6 +236,23 @@ async def handle_update(update: dict, db: Session) -> None:
     text = (msg.get("text") or "").strip()
     cmd = text.split()[0].split("@")[0].lower() if text.startswith("/") else ""
 
+    # 2b) Payment relay.
+    from .config import ADMIN_TG_ID
+    from . import payments
+    reply_to = msg.get("reply_to_message") or {}
+    if ADMIN_TG_ID and user_id == ADMIN_TG_ID and reply_to.get("message_id") and not cmd:
+        details = (msg.get("text") or msg.get("caption") or "").strip()
+        order = await payments.set_order_details(db, int(reply_to["message_id"]), details) if details else None
+        if order:
+            where = "in their Telegram chat and on the page" if order.tg_user_id else "on their page"
+            await _send(chat_id, f"📤 Sent to the buyer ({where}). You'll get ✅/❌ when they pay.", with_button=False)
+        else:
+            await _send(chat_id, "ℹ️ That message isn't an open payment request (or it's already closed).",
+                        with_button=False)
+        return
+    if not cmd and user_id != ADMIN_TG_ID and await payments.forward_buyer_proof(db, msg):
+        return
+
     if cmd in ("/start", "/help") or not cmd:
         await _send(chat_id, (
             "<b>🛡 VibeGuard</b> — security scanner for Firebase &amp; vibe-coded apps.\n\n"
@@ -253,6 +274,25 @@ async def handle_update(update: dict, db: Session) -> None:
                      + ("" if l.active else " (revoked)") for l in lics]
             await _send(chat_id, "<b>Your keys</b>\n" + "\n".join(lines)
                         + "\n\nKeys also work on the website.")
+    elif cmd == "/newkey":
+        from .config import ADMIN_TG_ID
+        if not ADMIN_TG_ID or user_id != ADMIN_TG_ID:
+            await _send(chat_id, "This command is for the admin only.", with_button=False)
+            return
+        parts = text.split()
+        try:
+            scans = max(1, min(1000, int(parts[1]))) if len(parts) > 1 else PACK_SCANS
+        except ValueError:
+            scans = PACK_SCANS
+        note = " ".join(parts[2:])[:200] or "issued via /newkey"
+        lic = models.License(key=new_key(), max_scans=scans, used=0, note=note)
+        db.add(lic)
+        db.commit()
+        await _send(chat_id, (
+            f"🔑 New key for <b>{scans}</b> full scans:\n\n<code>{lic.key}</code>\n\n"
+            "Tap to copy and send it to the buyer. They paste it under the report "
+            "(website) or in the Access tab (Mini App)."
+        ), with_button=False)
     elif cmd == "/myid":
         await _send(chat_id, f"Your Telegram ID: <code>{user_id}</code>\n"
                              "Put it into ADMIN_TG_ID to receive manual payment requests.", with_button=False)

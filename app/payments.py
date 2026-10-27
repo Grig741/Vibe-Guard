@@ -39,7 +39,6 @@ from .database import SessionLocal
 log = logging.getLogger("vibeguard.pay")
 
 CRYPTO_ENABLED = bool(CRYPTOPAY_TOKEN)
-MANUAL_ENABLED = bool(MANUAL_DETAILS)
 CP_BASE = "https://testnet-pay.crypt.bot/api" if CRYPTOPAY_TESTNET else "https://pay.crypt.bot/api"
 
 
@@ -140,55 +139,143 @@ async def handle_cp_webhook(db: Session, update_body: dict) -> None:
 
 
 # ---- Manual (requisites) -------------------------------------------------------
+#
+# Two modes:
+#   static — MANUAL_DETAILS is set: the buyer sees your requisites right away.
+#   relay  — MANUAL_DETAILS is empty but the bot + ADMIN_TG_ID are set: the buyer
+#            requests details, you REPLY to the bot's notification with them, and the
+#            bot forwards your reply to the buyer (Telegram chat and/or the web page).
+
+RELAY_ENABLED = bool(tg.ENABLED and ADMIN_TG_ID and not MANUAL_DETAILS)
+MANUAL_ENABLED = bool(MANUAL_DETAILS) or RELAY_ENABLED
+
+
+def _buyer_label(order: models.Order, tg_user: dict | None) -> str:
+    if tg_user:
+        uname = tg_user.get("username")
+        who = f"@{uname}" if uname else f"tg id {tg_user['id']}"
+        return f"{tg.esc(who)} ({tg.esc(tg_user.get('first_name', ''))})"
+    return "website visitor" + (f", contact: {tg.esc(order.contact)}" if order.contact else "")
+
+
+def _approve_kb(order_id: str) -> dict:
+    return {"inline_keyboard": [[
+        {"text": "✅ Approve", "callback_data": f"ord:ok:{order_id}"},
+        {"text": "❌ Reject", "callback_data": f"ord:no:{order_id}"},
+    ]]}
+
 
 async def create_manual_order(db: Session, scan: models.Scan, tg_user: dict | None,
                               contact: str | None, note: str | None) -> models.Order:
-    # Re-use an existing pending manual order for the same scan → no spam.
+    """static mode: note = proof (buyer already paid). relay mode: note may be empty (= request details)."""
     existing = db.scalars(select(models.Order).where(
         models.Order.scan_id == scan.id, models.Order.method == "manual",
         models.Order.status == "pending")).first()
     if existing:
-        if note:
-            existing.note = note[:1000]
         if contact:
             existing.contact = contact[:255]
-        db.commit()
+            db.commit()
+        if note:
+            await mark_buyer_paid(db, existing, note)
         return existing
 
     order = models.Order(method="manual", scan_id=scan.id, amount=PRICE_USD,
                          tg_user_id=tg_user["id"] if tg_user else None,
-                         contact=(contact or "")[:255] or None, note=(note or "")[:1000] or None)
+                         contact=(contact or "")[:255] or None)
     db.add(order)
     db.commit()
     db.refresh(order)
-    await notify_admin_manual(order, scan, tg_user)
+
+    if note:  # static mode: buyer paid to the published requisites
+        await mark_buyer_paid(db, order, note, scan=scan, tg_user=tg_user)
+    else:     # relay mode: ask the admin for requisites
+        await notify_admin_request(db, order, scan, tg_user)
     return order
 
 
-async def notify_admin_manual(order: models.Order, scan: models.Scan, tg_user: dict | None) -> None:
+async def notify_admin_request(db: Session, order: models.Order, scan: models.Scan, tg_user: dict | None) -> None:
     if not (tg.ENABLED and ADMIN_TG_ID):
-        log.warning("manual order %s created but ADMIN_TG_ID/BOT_TOKEN not set — approve via admin API", order.id)
+        log.warning("manual order %s: no BOT_TOKEN/ADMIN_TG_ID — cannot relay details", order.id)
         return
-    who = "website visitor"
-    if tg_user:
-        uname = tg_user.get("username")
-        who = f"@{uname}" if uname else f"tg id {tg_user['id']}"
-        who += f" ({tg.esc(tg_user.get('first_name', ''))})"
     text = (
-        "💰 <b>New manual payment</b>\n\n"
+        "🧾 <b>Payment details requested</b>\n\n"
         f"Amount: <b>${tg.esc(order.amount)}</b>\n"
-        f"Buyer: {tg.esc(who) if not tg_user else who}\n"
-        f"Contact: {tg.esc(order.contact or '—')}\n"
-        f"Proof / note: <code>{tg.esc(order.note or '—')}</code>\n"
+        f"Buyer: {_buyer_label(order, tg_user)}\n"
         f"Project: <code>{tg.esc(scan.project_id)}</code>\n"
+        f"Order: <code>{order.id}</code>\n\n"
+        "↩️ <b>Reply to this message</b> with your card / bank / wallet details — "
+        "I'll forward them to the buyer."
+    )
+    res = await tg.safe_call("sendMessage", chat_id=ADMIN_TG_ID, text=text, parse_mode="HTML",
+                             reply_markup={"inline_keyboard": [[
+                                 {"text": "❌ Cancel request", "callback_data": f"ord:no:{order.id}"}]]})
+    if res and res.get("message_id"):
+        order.admin_msg_id = int(res["message_id"])
+        db.commit()
+
+
+async def set_order_details(db: Session, admin_msg_id: int, details: str) -> models.Order | None:
+    """Admin replied to a request → store details and forward them to the buyer."""
+    order = db.scalars(select(models.Order).where(models.Order.admin_msg_id == admin_msg_id)).first()
+    if order is None or order.status != "pending":
+        return None
+    order.details = details[:2000]
+    db.commit()
+    if order.tg_user_id:
+        await tg.safe_call("sendMessage", chat_id=order.tg_user_id, parse_mode="HTML",
+                           text=("💳 <b>Payment details</b>\n\n"
+                                 f"Amount: <b>${tg.esc(order.amount)}</b>\n\n"
+                                 f"{tg.esc(order.details)}\n\n"
+                                 "After paying, tap <b>I've paid</b> in the app or send a screenshot here."),
+                           reply_markup=tg.open_app_markup("🛡 I've paid — open VibeGuard"))
+    return order
+
+
+async def mark_buyer_paid(db: Session, order: models.Order, note: str,
+                          scan: models.Scan | None = None, tg_user: dict | None = None) -> None:
+    """Buyer says they paid → ask the admin to confirm (✅ / ❌)."""
+    order.note = (note or "")[:1000] or order.note
+    first_time = not order.buyer_paid
+    order.buyer_paid = True
+    db.commit()
+    if not (tg.ENABLED and ADMIN_TG_ID) or (not first_time and not note):
+        if not (tg.ENABLED and ADMIN_TG_ID):
+            log.warning("manual order %s paid but ADMIN_TG_ID/BOT_TOKEN not set — approve via admin API", order.id)
+        return
+    scan = scan or (db.get(models.Scan, order.scan_id) if order.scan_id else None)
+    text = (
+        "💰 <b>Buyer says they paid</b>\n\n"
+        f"Amount: <b>${tg.esc(order.amount)}</b>\n"
+        f"Buyer: {_buyer_label(order, tg_user) if tg_user else (('tg id ' + str(order.tg_user_id)) if order.tg_user_id else _buyer_label(order, None))}\n"
+        f"Proof: <code>{tg.esc(order.note or '—')}</code>\n"
+        f"Project: <code>{tg.esc(scan.project_id if scan else '—')}</code>\n"
         f"Order: <code>{order.id}</code>\n\n"
         "Check your account, then approve or reject:"
     )
     await tg.safe_call("sendMessage", chat_id=ADMIN_TG_ID, text=text, parse_mode="HTML",
-                       reply_markup={"inline_keyboard": [[
-                           {"text": "✅ Approve", "callback_data": f"ord:ok:{order.id}"},
-                           {"text": "❌ Reject", "callback_data": f"ord:no:{order.id}"},
-                       ]]})
+                       reply_markup=_approve_kb(order.id))
+
+
+async def forward_buyer_proof(db: Session, msg: dict) -> bool:
+    """A buyer with a pending manual order sent something to the bot (e.g. a screenshot)."""
+    if not ADMIN_TG_ID:
+        return False
+    uid = (msg.get("from") or {}).get("id")
+    order = db.scalars(select(models.Order).where(
+        models.Order.tg_user_id == uid, models.Order.method == "manual",
+        models.Order.status == "pending").order_by(models.Order.created_at.desc())).first()
+    if order is None:
+        return False
+    await tg.safe_call("forwardMessage", chat_id=ADMIN_TG_ID, from_chat_id=msg["chat"]["id"],
+                       message_id=msg["message_id"])
+    await tg.safe_call("sendMessage", chat_id=ADMIN_TG_ID, parse_mode="HTML",
+                       text=f"📎 Proof from the buyer · order <code>{order.id}</code> · ${tg.esc(order.amount)}",
+                       reply_markup=_approve_kb(order.id))
+    order.buyer_paid = True
+    db.commit()
+    await tg.safe_call("sendMessage", chat_id=msg["chat"]["id"],
+                       text="👍 Got it — we'll check the payment and send your key here.")
+    return True
 
 
 async def reject_order(db: Session, order_id: str) -> bool:

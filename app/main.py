@@ -129,6 +129,17 @@ def health() -> dict:
     return {"status": "ok", "name": APP_NAME, "version": APP_VERSION}
 
 
+def _contact_url(contact: str) -> str | None:
+    c = (contact or "").strip()
+    if not c:
+        return None
+    if c.startswith("http"):
+        return c
+    if "@" in c and not c.startswith("@"):
+        return f"mailto:{c}"
+    return f"https://t.me/{c.lstrip('@')}"
+
+
 @app.get("/api/pricing")
 def pricing() -> dict:
     return {
@@ -145,8 +156,12 @@ def pricing() -> dict:
             "crypto": pay.CRYPTO_ENABLED,
             "manual": pay.MANUAL_ENABLED,
             "link": bool(PAYMENT_URL),
+            # No requisites on the site → "write to the seller" option.
+            "contact": bool(SUPPORT_CONTACT) and not pay.MANUAL_ENABLED,
         },
+        "contact_url": _contact_url(SUPPORT_CONTACT),
         "manual_details": MANUAL_DETAILS or None,
+        "manual_mode": "relay" if pay.RELAY_ENABLED else ("static" if pay.MANUAL_ENABLED else None),
     }
 
 
@@ -321,6 +336,8 @@ def _order_out(o: models.Order) -> dict:
         "scan_id": o.scan_id, "pay_url": o.pay_url, "mini_app_url": o.mini_app_url,
         # The key is only revealed once paid; order ids are unguessable (uuid4).
         "license_key": o.license_key if o.status == "paid" else None,
+        "details": o.details,
+        "buyer_paid": bool(o.buyer_paid),
     }
 
 
@@ -353,12 +370,31 @@ async def pay_manual(req: ManualPayRequest, db: Session = Depends(get_db),
                      user: dict | None = Depends(tg_user)) -> dict:
     if not pay.MANUAL_ENABLED:
         raise HTTPException(status_code=404, detail="Manual payments are not enabled")
-    if not (req.note or "").strip():
+    # Static requisites: the buyer already paid → proof required. Relay: just a request.
+    if not pay.RELAY_ENABLED and not (req.note or "").strip():
         raise HTTPException(status_code=422, detail="Tell us how you paid (tx hash, card last 4 digits or payer name)")
-    if user is None and not (req.contact or "").strip():
+    if user is None and not pay.RELAY_ENABLED and not (req.contact or "").strip():
         raise HTTPException(status_code=422, detail="Leave a contact so we can reach you")
     scan = _payable_scan(db, req.scan_id)
     order = await pay.create_manual_order(db, scan, user, req.contact, req.note)
+    return _order_out(order)
+
+
+class PaidRequest(BaseModel):
+    note: str
+
+
+@app.post("/api/pay/order/{order_id}/paid")
+async def pay_order_paid(order_id: str, req: PaidRequest, db: Session = Depends(get_db),
+                         user: dict | None = Depends(tg_user)) -> dict:
+    order = db.get(models.Order, order_id)
+    if order is None or order.method != "manual":
+        raise HTTPException(status_code=404, detail="Order not found")
+    if order.status != "pending":
+        return _order_out(order)
+    if not req.note.strip():
+        raise HTTPException(status_code=422, detail="Tell us how you paid (tx hash, card last 4 digits or payer name)")
+    await pay.mark_buyer_paid(db, order, req.note.strip(), tg_user=user)
     return _order_out(order)
 
 
