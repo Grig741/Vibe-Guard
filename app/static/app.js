@@ -255,9 +255,10 @@ function lockedBody(s) {
       </div>
     </div>`).join("");
 
-  const buy = pricing.payment_url
-    ? `<a class="buy-btn" href="${esc(pricing.payment_url)}" target="_blank" rel="noopener">Get full report — ${esc(pricing.price)}</a>
-       <div class="or-line">already have a key?</div>`
+  const m = pricing.methods || {};
+  const buy = (m.manual || m.crypto || m.link)
+    ? `<button class="buy-btn" id="buyBtn" type="button" style="border:0;cursor:pointer;font-family:inherit">Get full report — $${esc(pricing.price_usd || "9")}</button>
+       <div class="or-line">card, bank transfer or crypto · already have a key?</div>`
     : "";
 
   return `
@@ -284,7 +285,22 @@ function lockedBody(s) {
     </div>`;
 }
 
-function bindLocked() {
+function payCtx() {
+  return {
+    api, toast, inTG: false,
+    onHaveKey: () => { const i = $("#keyInput"); if (i) { i.focus(); i.scrollIntoView({ block: "center" }); } },
+    async onPaid(scanId, key) {
+      if (key) setKey(key);
+      addHistoryId(scanId);
+      try { renderReport(await api("/api/scans/" + scanId)); } catch (_) {}
+      loadHistory();
+    },
+  };
+}
+
+function bindLocked(s) {
+  const buyBtn = $("#buyBtn");
+  if (buyBtn) buyBtn.addEventListener("click", () => VGPay.open(s, payCtx()));
   const input = $("#keyInput");
   const btn = $("#unlockBtn");
   if (!input || !btn) return;
@@ -430,6 +446,11 @@ async function boot() {
   try { pricing = await api("/api/pricing"); } catch (_) {}
   renderProStatus();
   loadHistory();
+  // Back from CryptoBot (?order=…) or returning after a manual transfer was approved.
+  let orderId = null;
+  try { orderId = new URLSearchParams(location.search).get("order"); } catch (_) {}
+  if (orderId) { try { history.replaceState(null, "", location.pathname); } catch (_) {} }
+  VGPay.resume(payCtx(), orderId);
 }
 
 /* ---------- Utils ---------- */

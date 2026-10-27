@@ -97,6 +97,24 @@ Optional env vars (Settings → Variables):
 | `PAYMENT_URL` | *(empty)* | Link for the "Get full report" button |
 | `PRICE_LABEL` | `$9` | Price shown on the button |
 
+## Getting paid: card, bank transfer, crypto wallet
+
+1. Set `MANUAL_DETAILS` — your requisites, shown to buyers (use `\n` for new lines), e.g.
+   `Card (AMD): 4318 …\nUSDT TRC20: TQ7x…`
+2. Send `/myid` to your bot and put the number into `ADMIN_TG_ID`.
+3. A buyer taps **Get full report → Card / bank / crypto wallet**, transfers the money and
+   presses **I've paid** with a proof (tx hash or card last 4 digits + name).
+4. You get a Telegram message with **✅ Approve / ❌ Reject**. Check your account → ✅.
+   The buyer gets a key for `PACK_SCANS` full scans and the report unlocks by itself
+   (in Telegram the key also arrives in the chat).
+
+Without the bot you can approve via API: `GET /api/admin/orders?status=pending`,
+`POST /api/admin/orders/{id}/approve` (header `X-Admin-Token`).
+
+Optional extras: `CRYPTOPAY_TOKEN` (@CryptoBot, fully automatic crypto; webhook URL
+`https://YOUR-DOMAIN/pay/cryptobot/webhook`, works without it too) and Telegram Stars
+(always on when `BOT_TOKEN` is set).
+
 ### Telegram bot + Mini App (Stars payments)
 
 1. In Telegram open **@BotFather** → `/newbot` → copy the token.

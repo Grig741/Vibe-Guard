@@ -79,7 +79,7 @@ async def setup_bot() -> None:
         "setWebhook",
         url=f"{PUBLIC_URL}/tg/webhook",
         secret_token=TG_WEBHOOK_SECRET,
-        allowed_updates=["message", "pre_checkout_query"],
+        allowed_updates=["message", "pre_checkout_query", "callback_query"],
         drop_pending_updates=False,
     )
     await safe_call("setMyCommands", commands=[
@@ -159,6 +159,24 @@ def _open_app_markup(text: str = "🛡 Open VibeGuard") -> dict | None:
     return {"inline_keyboard": [[{"text": text, "web_app": {"url": url}}]]}
 
 
+def esc(s: str) -> str:
+    return (str(s or "")).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+
+async def send_text(chat_id: int, text: str) -> None:
+    await _send(chat_id, text, with_button=True)
+
+
+async def send_key_message(chat_id: int, lic: models.License) -> None:
+    left = lic.max_scans - lic.used
+    await _send(chat_id, (
+        "✅ <b>Payment received — full report unlocked.</b>\n\n"
+        f"Your key: <code>{lic.key}</code>\n"
+        f"{left} more full scans left. In the app they unlock automatically; "
+        "on the website paste the key under the report."
+    ), with_button=True)
+
+
 async def _send(chat_id: int, text: str, with_button: bool = True) -> None:
     params = {"chat_id": chat_id, "text": text, "parse_mode": "HTML",
               "disable_web_page_preview": True}
@@ -192,6 +210,12 @@ async def handle_update(update: dict, db: Session) -> None:
         await safe_call("answerPreCheckoutQuery", **params)
         return
 
+    # 1b) Admin pressed ✅ / ❌ on a manual payment.
+    cq = update.get("callback_query")
+    if cq:
+        await _on_callback(db, cq)
+        return
+
     msg = update.get("message")
     if not msg:
         return
@@ -214,8 +238,8 @@ async def handle_update(update: dict, db: Session) -> None:
             "Paste your <code>firebaseConfig</code> and in seconds you'll know if anyone "
             "can read or wipe your database, list your storage, or sign up without limits.\n\n"
             "• <b>Free:</b> grade + how many holes you have\n"
-            f"• <b>Full report — ⭐ {STARS_PRICE}:</b> every hole, proof and copy-paste fixes "
-            f"({PACK_SCANS} scans)\n\n"
+            f"• <b>Full report:</b> every hole, proof and copy-paste fixes ({PACK_SCANS} scans) — "
+            f"pay with ⭐ Stars, crypto or bank transfer\n\n"
             "Tap the button to start 👇"
         ))
     elif cmd == "/key":
@@ -229,6 +253,9 @@ async def handle_update(update: dict, db: Session) -> None:
                      + ("" if l.active else " (revoked)") for l in lics]
             await _send(chat_id, "<b>Your keys</b>\n" + "\n".join(lines)
                         + "\n\nKeys also work on the website.")
+    elif cmd == "/myid":
+        await _send(chat_id, f"Your Telegram ID: <code>{user_id}</code>\n"
+                             "Put it into ADMIN_TG_ID to receive manual payment requests.", with_button=False)
     elif cmd == "/paysupport":
         contact = SUPPORT_CONTACT or "reply to this chat"
         await _send(chat_id, (
@@ -265,10 +292,35 @@ async def _on_payment(db: Session, chat_id: int, user_id: int, sp: dict) -> None
                           stars=int(sp.get("total_amount") or 0), license_key=lic.key))
     db.commit()
 
-    left = lic.max_scans - lic.used
-    await _send(chat_id, (
-        "✅ <b>Payment received — full report unlocked.</b>\n\n"
-        f"Your key: <code>{lic.key}</code>\n"
-        f"{left} more full scans left. In the app they unlock automatically; "
-        "on the website paste the key under the report."
-    ), with_button=True)
+    await send_key_message(chat_id, lic)
+
+
+async def _on_callback(db: Session, cq: dict) -> None:
+    from . import payments  # lazy: payments imports this module
+    from .config import ADMIN_TG_ID
+
+    data = cq.get("data") or ""
+    from_id = (cq.get("from") or {}).get("id")
+    msg = cq.get("message") or {}
+
+    if not data.startswith("ord:"):
+        await safe_call("answerCallbackQuery", callback_query_id=cq["id"])
+        return
+    if not ADMIN_TG_ID or from_id != ADMIN_TG_ID:
+        await safe_call("answerCallbackQuery", callback_query_id=cq["id"], text="Not allowed", show_alert=True)
+        return
+
+    _, action, order_id = (data.split(":", 2) + ["", ""])[:3]
+    if action == "ok":
+        lic = await payments.fulfill_order(db, order_id, source="manual approve")
+        result = f"✅ Approved — key {lic.key}" if lic else "ℹ️ Already processed"
+    elif action == "no":
+        result = "❌ Rejected" if await payments.reject_order(db, order_id) else "ℹ️ Already processed"
+    else:
+        result = "Unknown action"
+
+    await safe_call("answerCallbackQuery", callback_query_id=cq["id"], text=result[:190])
+    if msg.get("chat") and msg.get("message_id"):
+        # Plain text edit: the original HTML formatting is gone in msg["text"], so no parse_mode.
+        await safe_call("editMessageText", chat_id=msg["chat"]["id"], message_id=msg["message_id"],
+                        text=(msg.get("text") or "") + "\n\n" + result)

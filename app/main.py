@@ -23,15 +23,19 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from . import models
+from . import payments as pay
 from . import telegram as tg
 from .config import (
     ADMIN_TOKEN,
     APP_NAME,
     APP_VERSION,
+    MANUAL_DETAILS,
     PACK_SCANS,
     PAYMENT_URL,
     PRICE_LABEL,
+    PRICE_USD,
     STARS_PRICE,
+    SUPPORT_CONTACT,
     TG_WEBHOOK_SECRET,
 )
 from .database import SessionLocal, get_db, init_db
@@ -58,6 +62,8 @@ async def _startup() -> None:
     init_db()
     if tg.ENABLED:
         asyncio.create_task(tg.setup_bot())
+    if pay.CRYPTO_ENABLED:
+        asyncio.create_task(pay.sweep_loop())
 
 
 # ---- Helpers -----------------------------------------------------------------
@@ -132,6 +138,15 @@ def pricing() -> dict:
         "pack_scans": PACK_SCANS,
         "telegram": tg.ENABLED,
         "bot_username": tg.BOT_USERNAME or None,
+        "price_usd": PRICE_USD,
+        "support": SUPPORT_CONTACT or None,
+        "methods": {
+            "stars": tg.ENABLED,
+            "crypto": pay.CRYPTO_ENABLED,
+            "manual": pay.MANUAL_ENABLED,
+            "link": bool(PAYMENT_URL),
+        },
+        "manual_details": MANUAL_DETAILS or None,
     }
 
 
@@ -288,7 +303,121 @@ async def tg_webhook(request: Request,
     return {"ok": True}  # always 200 so Telegram doesn't retry forever
 
 
+# ---- Crypto & manual payments ------------------------------------------------
+
+class PayRequest(BaseModel):
+    scan_id: str
+
+
+class ManualPayRequest(BaseModel):
+    scan_id: str
+    contact: str | None = None
+    note: str | None = None
+
+
+def _order_out(o: models.Order) -> dict:
+    return {
+        "id": o.id, "method": o.method, "status": o.status, "amount": o.amount,
+        "scan_id": o.scan_id, "pay_url": o.pay_url, "mini_app_url": o.mini_app_url,
+        # The key is only revealed once paid; order ids are unguessable (uuid4).
+        "license_key": o.license_key if o.status == "paid" else None,
+    }
+
+
+def _payable_scan(db: Session, scan_id: str) -> models.Scan:
+    scan = db.get(models.Scan, scan_id)
+    if scan is None:
+        raise HTTPException(status_code=404, detail="Scan not found")
+    if scan.unlocked:
+        raise HTTPException(status_code=409, detail="Already unlocked")
+    return scan
+
+
+@app.post("/api/pay/crypto")
+async def pay_crypto(req: PayRequest, db: Session = Depends(get_db),
+                     user: dict | None = Depends(tg_user)) -> dict:
+    if not pay.CRYPTO_ENABLED:
+        raise HTTPException(status_code=404, detail="Crypto payments are not enabled")
+    scan = _payable_scan(db, req.scan_id)
+    try:
+        order = await pay.create_crypto_order(db, scan, user["id"] if user else None)
+    except Exception as exc:  # noqa: BLE001
+        db.rollback()
+        logging.exception("createInvoice failed")
+        raise HTTPException(status_code=502, detail=f"CryptoBot error: {exc}") from exc
+    return _order_out(order)
+
+
+@app.post("/api/pay/manual")
+async def pay_manual(req: ManualPayRequest, db: Session = Depends(get_db),
+                     user: dict | None = Depends(tg_user)) -> dict:
+    if not pay.MANUAL_ENABLED:
+        raise HTTPException(status_code=404, detail="Manual payments are not enabled")
+    if not (req.note or "").strip():
+        raise HTTPException(status_code=422, detail="Tell us how you paid (tx hash, card last 4 digits or payer name)")
+    if user is None and not (req.contact or "").strip():
+        raise HTTPException(status_code=422, detail="Leave a contact so we can reach you")
+    scan = _payable_scan(db, req.scan_id)
+    order = await pay.create_manual_order(db, scan, user, req.contact, req.note)
+    return _order_out(order)
+
+
+@app.get("/api/pay/order/{order_id}")
+async def pay_order_status(order_id: str, db: Session = Depends(get_db)) -> dict:
+    order = db.get(models.Order, order_id)
+    if order is None:
+        raise HTTPException(status_code=404, detail="Order not found")
+    if order.method == "cryptobot" and order.status == "pending":
+        order = await pay.refresh_crypto_order(db, order)
+    return _order_out(order)
+
+
+@app.post("/pay/cryptobot/webhook")
+async def cryptobot_webhook(request: Request,
+                            crypto_pay_api_signature: str | None = Header(default=None)):
+    raw = await request.body()
+    if not pay.verify_cp_signature(raw, crypto_pay_api_signature):
+        raise HTTPException(status_code=401, detail="Bad signature")
+    try:
+        body = await request.json()
+    except Exception:  # noqa: BLE001
+        return {"ok": True}
+    db = SessionLocal()
+    try:
+        await pay.handle_cp_webhook(db, body)
+    except Exception:  # noqa: BLE001
+        logging.exception("cryptobot webhook failed")
+        db.rollback()
+    finally:
+        db.close()
+    return {"ok": True}
+
+
 # ---- Admin API (X-Admin-Token) -----------------------------------------------
+
+@app.get("/api/admin/orders", dependencies=[Depends(require_admin)])
+def admin_list_orders(status: str | None = None, db: Session = Depends(get_db)) -> list[dict]:
+    stmt = select(models.Order).order_by(models.Order.created_at.desc()).limit(200)
+    if status:
+        stmt = stmt.where(models.Order.status == status)
+    return [{**_order_out(o), "contact": o.contact, "note": o.note, "tg_user_id": o.tg_user_id,
+             "license_key": o.license_key, "created_at": o.created_at.isoformat()}
+            for o in db.scalars(stmt)]
+
+
+@app.post("/api/admin/orders/{order_id}/approve", dependencies=[Depends(require_admin)])
+async def admin_approve_order(order_id: str, db: Session = Depends(get_db)) -> dict:
+    lic = await pay.fulfill_order(db, order_id, source="admin api")
+    if lic is None:
+        raise HTTPException(status_code=409, detail="Order not found or not pending")
+    return {"approved": order_id, "license_key": lic.key}
+
+
+@app.post("/api/admin/orders/{order_id}/reject", dependencies=[Depends(require_admin)])
+async def admin_reject_order(order_id: str, db: Session = Depends(get_db)) -> dict:
+    if not await pay.reject_order(db, order_id):
+        raise HTTPException(status_code=409, detail="Order not found or not pending")
+    return {"rejected": order_id}
 
 @app.post("/api/admin/licenses", response_model=LicenseOut,
           dependencies=[Depends(require_admin)])

@@ -263,8 +263,7 @@
       const left = me && me.license && me.license.key === ownKey ? me.license.remaining : null;
       primary.set(left != null ? `Unlock · uses 1 of ${left} scans` : "Unlock with my key", () => unlockWith(s, ownKey));
     } else if (s.locked && s.issues > 0) {
-      const canStars = inTG;
-      primary.set(canStars ? `Unlock full report · ⭐ ${pricing.stars}` : `Get full report — ${pricing.price}`, () => buy(s), { stars: canStars });
+      primary.set(`Unlock full report — $${pricing.price_usd || "9"}`, () => VGPay.open(s, payCtx(s)));
       const k = $("#lockKeyBtn");
       if (k) k.addEventListener("click", (e) => { e.preventDefault(); haptic.soft(); goTab("key"); });
     } else {
@@ -305,7 +304,7 @@
           <li>Copy-paste security rules to fix it</li>
           <li>${pricing.pack_scans} full scans to re-check after fixing</li>
         </ul>
-        ${inTG ? `<div class="price"><b>⭐ ${pricing.stars}</b> Telegram Stars · one tap</div>` : ""}
+        <div class="price"><b>$${esc(pricing.price_usd || "9")}</b> · card, bank transfer or crypto</div>
         <p class="fine left"><a href="#" id="lockKeyBtn" style="color:var(--accent)">I already have a key →</a></p>
       </div>`;
   }
@@ -342,6 +341,20 @@
   mo.observe($("#result"), { childList: true });
 
   /* ---------------- Payment ---------------- */
+  function payCtx(s) {
+    return {
+      api, toast, inTG, tg,
+      haptic: { tap: haptic.tap, ok: haptic.ok, err: haptic.err },
+      onStars: s ? () => buy(s) : null,
+      onHaveKey: () => goTab("key"),
+      async onPaid(scanId, key) {
+        if (key) setKey(key);
+        await refreshMe();
+        try { showResult(await api("/api/scans/" + scanId)); } catch (_) {}
+      },
+    };
+  }
+
   async function unlockWith(scan, key) {
     primary.loading(true);
     try {
@@ -506,5 +519,7 @@
     const sp = inTG && tg.initDataUnsafe && tg.initDataUnsafe.start_param;
     if (sp === "history") goTab("history");
     if (sp === "key") goTab("key");
+    // Came back after paying (CryptoBot) or the admin approved a transfer meanwhile.
+    VGPay.resume(payCtx(null));
   })();
 })();

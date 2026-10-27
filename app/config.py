@@ -58,5 +58,24 @@ PACK_SCANS = int(os.getenv("PACK_SCANS", "10"))
 # Shown on /paysupport (required by Telegram for bots that take payments).
 SUPPORT_CONTACT = os.getenv("SUPPORT_CONTACT", "").strip()
 
+# ---- Crypto & bank-transfer payments ------------------------------------------
+# Price for crypto / manual payments, in USD (number).
+PRICE_USD = os.getenv("PRICE_USD", "9").strip()
+
+# @CryptoBot → Crypto Pay → Create App → API token. Empty = CryptoBot payments off.
+CRYPTOPAY_TOKEN = os.getenv("CRYPTOPAY_TOKEN", "").strip()
+CRYPTOPAY_TESTNET = os.getenv("CRYPTOPAY_TESTNET", "").strip().lower() in ("1", "true", "yes")
+CRYPTOPAY_ASSETS = os.getenv("CRYPTOPAY_ASSETS", "USDT,TON,BTC,ETH,LTC,TRX,USDC,BNB").strip()
+
+# Manual payments: free text shown to the buyer (card / bank requisites, wallet addresses).
+# Use \n for new lines. Empty = manual payments off.
+MANUAL_DETAILS = os.getenv("MANUAL_DETAILS", "").replace("\\n", "\n").strip()
+# Your own Telegram user ID — manual orders arrive to you with ✅/❌ buttons.
+# Send /myid to the bot to find it.
+try:
+    ADMIN_TG_ID = int(os.getenv("ADMIN_TG_ID", "0").strip() or 0)
+except ValueError:
+    ADMIN_TG_ID = 0
+
 APP_NAME = "VibeGuard"
 APP_VERSION = "1.2.0"

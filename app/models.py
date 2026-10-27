@@ -86,6 +86,25 @@ class License(Base):
     created_at = Column(DateTime(timezone=True), default=_now, nullable=False)
 
 
+class Order(Base):
+    """A crypto (CryptoBot) or manual (bank / wallet transfer) purchase."""
+    __tablename__ = "orders"
+
+    id = Column(String(32), primary_key=True, default=_uuid)
+    method = Column(String(16), nullable=False)             # cryptobot | manual
+    status = Column(String(16), default="pending", nullable=False, index=True)  # pending|paid|rejected|expired
+    scan_id = Column(String(32), nullable=True)
+    tg_user_id = Column(BigInteger, nullable=True, index=True)
+    amount = Column(String(32), nullable=False)             # USD
+    invoice_id = Column(String(64), nullable=True)          # CryptoBot invoice id
+    pay_url = Column(Text, nullable=True)
+    mini_app_url = Column(Text, nullable=True)
+    contact = Column(String(255), nullable=True)            # buyer contact (manual)
+    note = Column(Text, nullable=True)                      # tx hash / payer name (manual)
+    license_key = Column(String(64), nullable=True)
+    created_at = Column(DateTime(timezone=True), default=_now, index=True, nullable=False)
+
+
 class Payment(Base):
     """A Telegram Stars payment. charge_id is unique → webhook retries are idempotent."""
     __tablename__ = "payments"

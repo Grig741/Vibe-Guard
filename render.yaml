@@ -18,6 +18,14 @@ services:
         sync: false
       - key: SUPPORT_CONTACT     # e.g. @your_username
         sync: false
+      - key: MANUAL_DETAILS      # your card / bank / wallet details shown to buyers (\n = new line)
+        sync: false
+      - key: ADMIN_TG_ID         # your Telegram ID (send /myid to the bot) — manual payments come here
+        sync: false
+      - key: PRICE_USD
+        value: "9"
+      - key: CRYPTOPAY_TOKEN     # optional: @CryptoBot → Crypto Pay → Create App
+        sync: false
       - key: PAYMENT_URL         # optional: Stripe/Gumroad link for the website
         sync: false
       - key: PRICE_LABEL
