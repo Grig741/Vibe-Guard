@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <title>VibeGuard</title>
+  <meta name="theme-color" content="#06090f" />
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,700;12..96,800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/tg/tg.css" />
+</head>
+<body>
+  <div class="bg" aria-hidden="true"><div class="bg-orb a"></div><div class="bg-orb b"></div></div>
+
+  <!-- ============ SCAN ============ -->
+  <section class="screen active" id="scr-scan">
+    <header class="hero">
+      <div class="logo-wrap">
+        <div class="logo-ring"></div>
+        <svg class="logo" viewBox="0 0 24 24"><path class="lf" d="M12 2 4 5v6c0 5 3.4 9.4 8 11 4.6-1.6 8-6 8-11V5l-8-3Z"/><path class="lc" d="m8.5 12 2.4 2.4L16 9.3"/></svg>
+      </div>
+      <h1>Vibe<span>Guard</span></h1>
+      <p>Find the holes in your Firebase app<br/>before someone else does.</p>
+    </header>
+
+    <div class="card in">
+      <label class="lbl" for="cfg">Firebase config <span>paste from your app</span></label>
+      <textarea id="cfg" spellcheck="false" autocomplete="off" placeholder='const firebaseConfig = {
+  apiKey: "AIza…",
+  projectId: "my-app",
+  storageBucket: "my-app.appspot.com"
+};'></textarea>
+      <div class="parse" id="parse"></div>
+      <div class="row">
+        <button class="chip-btn" id="pasteBtn" type="button">⎘ Paste</button>
+        <button class="chip-btn" id="howBtn" type="button">? Where is it</button>
+      </div>
+      <div class="how" id="how" hidden>
+        Firebase console → ⚙ Project settings → General → <b>Your apps</b> → SDK setup → <b>Config</b>. Or search your code for <code>firebaseConfig</code>.
+      </div>
+      <input id="label" class="inp" type="text" placeholder="Label (optional) — e.g. My app · prod" maxlength="80" />
+    </div>
+
+    <div class="checks-mini in">
+      <span>Firestore</span><span>Realtime DB</span><span>Storage</span><span>Auth</span><span>API key</span>
+    </div>
+
+    <p class="fine">Scan only projects you own. Your API key is never stored.</p>
+  </section>
+
+  <!-- ============ SCANNING ============ -->
+  <section class="screen" id="scr-scanning">
+    <div class="radar">
+      <div class="rr r1"></div><div class="rr r2"></div><div class="rr r3"></div>
+      <div class="sweep"></div>
+      <i class="bl b1"></i><i class="bl b2"></i><i class="bl b3"></i>
+      <svg viewBox="0 0 24 24"><path d="M12 2 4 5v6c0 5 3.4 9.4 8 11 4.6-1.6 8-6 8-11V5l-8-3Z"/></svg>
+    </div>
+    <h2 class="scan-title">Scanning <span id="scanProject">…</span></h2>
+    <ul class="steps" id="steps">
+      <li data-k="0">Firestore read access</li>
+      <li data-k="1">Firestore write access</li>
+      <li data-k="2">Realtime Database</li>
+      <li data-k="3">Storage bucket</li>
+      <li data-k="4">Authentication</li>
+      <li data-k="5">API key restrictions</li>
+    </ul>
+  </section>
+
+  <!-- ============ RESULT ============ -->
+  <section class="screen" id="scr-result">
+    <div id="result"></div>
+  </section>
+
+  <!-- ============ HISTORY ============ -->
+  <section class="screen" id="scr-history">
+    <h2 class="scr-h">History</h2>
+    <ul class="hist" id="hist"></ul>
+  </section>
+
+  <!-- ============ KEY ============ -->
+  <section class="screen" id="scr-key">
+    <h2 class="scr-h">My access</h2>
+    <div id="keyBox"></div>
+    <div class="card">
+      <label class="lbl" for="keyInp">Have a license key?</label>
+      <div class="row">
+        <input id="keyInp" class="inp mono" type="text" placeholder="VG-XXXX-XXXX-XXXX" autocomplete="off" />
+        <button class="chip-btn solid" id="keySave">Save</button>
+      </div>
+      <p class="fine left">Keys bought on the website work here too.</p>
+    </div>
+  </section>
+
+  <!-- ============ TABS ============ -->
+  <nav class="tabs" id="tabs">
+    <button class="tab active" data-tab="scan"><svg viewBox="0 0 24 24"><path d="M12 2 4 5v6c0 5 3.4 9.4 8 11 4.6-1.6 8-6 8-11V5l-8-3Z"/></svg><span>Scan</span></button>
+    <button class="tab" data-tab="history"><svg viewBox="0 0 24 24"><path d="M12 7v5l3 2M3 12a9 9 0 1 0 3-6.7M3 4v4h4"/></svg><span>History</span></button>
+    <button class="tab" data-tab="key"><svg viewBox="0 0 24 24"><circle cx="8" cy="15" r="4"/><path d="m11 12 9-9M17 6l3 3"/></svg><span>Access</span></button>
+  </nav>
+
+  <button class="page-btn" id="pageBtn" hidden></button>
+  <div class="toast" id="toast"></div>
+
+  <script src="/tg/tg.js"></script>
+</body>
+</html>

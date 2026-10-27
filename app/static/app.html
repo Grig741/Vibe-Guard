@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Scanner — VibeGuard</title>
+  <meta name="description" content="Scan your Firebase / vibe-coded app for open database rules, exposed storage and weak auth — in seconds." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/style.css" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%235eead4' d='M12 2 4 5v6c0 5 3.4 9.4 8 11 4.6-1.6 8-6 8-11V5l-8-3Z'/%3E%3C/svg%3E" />
+</head>
+<body>
+  <div class="bg-grid" aria-hidden="true"></div>
+
+  <header class="site-header">
+    <a class="brand" href="/" style="text-decoration:none;color:inherit">
+      <svg class="brand-mark" viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M12 2 4 5v6c0 5 3.4 9.4 8 11 4.6-1.6 8-6 8-11V5l-8-3Z" />
+        <path class="brand-check" d="m8.5 12 2.4 2.4L16 9.3" fill="none" />
+      </svg>
+      <span class="brand-name">Vibe<span>Guard</span></span>
+    </a>
+    <nav class="header-meta">
+      <a href="/">Home</a>
+      <span class="dot">·</span>
+      <a href="/">Home</a>
+      <span class="dot">·</span>
+      <a href="/tg/">Telegram</a>
+      <span class="dot">·</span>
+      <a href="/docs" target="_blank" rel="noopener">API</a>
+      <span class="dot">·</span>
+      <span id="healthBadge" class="health">checking…</span>
+    </nav>
+  </header>
+
+  <main class="layout">
+    <!-- LEFT: input -->
+    <section class="panel input-panel">
+      <div class="panel-head">
+        <h1>Scan your Firebase app</h1>
+        <p class="sub">Paste the <code>firebaseConfig</code> from your own app. VibeGuard probes it the way an attacker would — read-only and self-cleaning — and grades what it finds.</p>
+      </div>
+
+      <label class="field-label" for="configInput">Firebase config
+        <span class="hint">JS object or JSON — pasted straight from your app</span>
+      </label>
+      <textarea id="configInput" spellcheck="false" placeholder="const firebaseConfig = {
+  apiKey: &quot;AIza...&quot;,
+  authDomain: &quot;my-app.firebaseapp.com&quot;,
+  projectId: &quot;my-app&quot;,
+  storageBucket: &quot;my-app.appspot.com&quot;,
+  databaseURL: &quot;https://my-app-default-rtdb.firebaseio.com&quot;
+};"></textarea>
+      <div id="parseStatus" class="parse-status"></div>
+
+      <div class="field-row">
+        <div class="field-col">
+          <label class="field-label" for="labelInput">Label <span class="hint">optional</span></label>
+          <input id="labelInput" type="text" placeholder="e.g. Clarity — production" />
+        </div>
+        <div class="field-col">
+          <label class="field-label" for="collectionsInput">Extra collections <span class="hint">comma-separated</span></label>
+          <input id="collectionsInput" type="text" placeholder="habits, moods, logs" />
+        </div>
+      </div>
+
+      <button id="scanBtn" class="scan-btn">
+        <span class="btn-label">Run security scan</span>
+        <span class="btn-spinner" aria-hidden="true"></span>
+      </button>
+
+      <div id="proStatus" class="pro-status" hidden></div>
+
+      <p class="disclaimer">Scan only projects you own or are authorized to test. VibeGuard never stores your API key.</p>
+
+      <div class="history">
+        <div class="history-head">
+          <h3>Your scans</h3>
+          <button id="refreshHistory" class="link-btn" title="Refresh">↻</button>
+        </div>
+        <ul id="historyList" class="history-list"><li class="empty">No scans yet.</li></ul>
+      </div>
+    </section>
+
+    <!-- RIGHT: report -->
+    <section class="panel report-panel" id="reportPanel">
+      <div id="reportEmpty" class="report-empty">
+        <svg viewBox="0 0 24 24" class="empty-shield" aria-hidden="true">
+          <path d="M12 2 4 5v6c0 5 3.4 9.4 8 11 4.6-1.6 8-6 8-11V5l-8-3Z" />
+        </svg>
+        <h2>No report yet</h2>
+        <p>Free scan shows your grade and how many holes you have. Unlock the full report to see each one and exactly how to fix it.</p>
+        <ul class="feature-list">
+          <li>Firestore open read / write</li>
+          <li>Realtime Database open rules</li>
+          <li>Storage bucket exposure</li>
+          <li>Open sign-up &amp; anonymous auth</li>
+          <li>Unrestricted web API key</li>
+        </ul>
+      </div>
+      <div id="reportContent" class="report-content" hidden></div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <span>VibeGuard</span><span class="dot">·</span><span>Security self-scan for Firebase &amp; vibe-coded apps</span>
+  </footer>
+
+  <script src="/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,28 @@
+# Render Blueprint — New → Blueprint → pick this repo.
+# Free web service. Free instances sleep after 15 min idle (first request ~30-50s),
+# and have no persistent disk → set DATABASE_URL to a free Supabase/Neon Postgres.
+services:
+  - type: web
+    name: vibeguard
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: DATABASE_URL        # Supabase → Project Settings → Database → Connection string (URI)
+        sync: false
+      - key: ADMIN_TOKEN
+        generateValue: true      # Render generates a random secret; copy it from the dashboard
+      - key: BOT_TOKEN           # from @BotFather (optional)
+        sync: false
+      - key: SUPPORT_CONTACT     # e.g. @your_username
+        sync: false
+      - key: PAYMENT_URL         # optional: Stripe/Gumroad link for the website
+        sync: false
+      - key: PRICE_LABEL
+        value: $9
+      - key: STARS_PRICE
+        value: "450"
+      - key: PACK_SCANS
+        value: "10"

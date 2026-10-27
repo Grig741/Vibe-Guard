@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>VibeGuard — Find the holes in your Firebase app</title>
+  <meta name="description" content="VibeGuard scans your Firebase / vibe-coded app for open database rules, public storage and weak auth in seconds — and tells you exactly how to fix them." />
+  <meta property="og:title" content="VibeGuard — Firebase security scanner" />
+  <meta property="og:description" content="Open Firestore? Public storage? Find out in 10 seconds. Free scan." />
+  <meta name="theme-color" content="#06090f" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/landing.css" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%235eead4' d='M12 2 4 5v6c0 5 3.4 9.4 8 11 4.6-1.6 8-6 8-11V5l-8-3Z'/%3E%3C/svg%3E" />
+</head>
+<body>
+  <div class="progress" aria-hidden="true"><span id="progressBar"></span></div>
+  <div class="spotlight" aria-hidden="true"></div>
+  <div class="noise" aria-hidden="true"></div>
+
+  <!-- NAV -->
+  <header class="nav" id="nav">
+    <a href="/" class="brand">
+      <svg viewBox="0 0 24 24" class="brand-mark" aria-hidden="true">
+        <path d="M12 2 4 5v6c0 5 3.4 9.4 8 11 4.6-1.6 8-6 8-11V5l-8-3Z" />
+        <path class="brand-check" d="m8.5 12 2.4 2.4L16 9.3" fill="none" />
+      </svg>
+      <span>Vibe<b>Guard</b></span>
+    </a>
+    <nav class="nav-links">
+      <a href="#demo">Demo</a>
+      <a href="#checks">Checks</a>
+      <a href="#pricing">Pricing</a>
+      <a href="#telegram">Telegram</a>
+      <a href="#faq">FAQ</a>
+    </nav>
+    <a href="/app" class="btn btn-sm btn-primary magnetic"><span>Scan free</span></a>
+  </header>
+
+  <main>
+    <!-- HERO -->
+    <section class="hero" id="top">
+      <canvas id="net" class="net" aria-hidden="true"></canvas>
+      <div class="orb orb-a" aria-hidden="true"></div>
+      <div class="orb orb-b" aria-hidden="true"></div>
+
+      <div class="hero-inner">
+        <div class="hero-copy">
+          <div class="pill reveal-hero"><span class="pulse-dot"></span> Firebase security scanner</div>
+          <h1 class="hero-title">
+            <span class="line"><span class="word">Find</span> <span class="word">the</span> <span class="word">holes</span></span>
+            <span class="line"><span class="word">in</span> <span class="word">your</span> <span class="word grad">app</span></span>
+            <span class="line"><span class="word">before</span> <span class="word">someone</span> <span class="word">else</span> <span class="word">does.</span></span>
+          </h1>
+          <p class="hero-sub reveal-hero">
+            Paste your <code>firebaseConfig</code>. VibeGuard probes
+            <span class="typer"><span id="typer">Firestore</span><span class="caret">|</span></span>
+            the way an attacker would — and tells you exactly how to close every hole.
+          </p>
+          <div class="hero-ctas reveal-hero">
+            <a href="/app" class="btn btn-primary btn-lg magnetic"><span>Scan my app — free</span>
+              <svg viewBox="0 0 24 24" class="arrow"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
+            <a href="#telegram" class="btn btn-ghost btn-lg magnetic tg-link"><span>
+              <svg viewBox="0 0 24 24" class="tg-ico"><path d="M21.5 4.3 2.9 11.5c-1.3.5-1.3 1.2-.2 1.6l4.8 1.5 1.8 5.6c.2.6.4.8.9.8.4 0 .6-.2.9-.4l2.3-2.2 4.7 3.5c.9.5 1.5.2 1.7-.8l3.1-14.6c.3-1.3-.5-1.9-1.4-1.5ZM9.2 14.3l9-5.7c.4-.3.8-.1.5.2l-7.6 6.9-.3 3.1-1.6-4.5Z"/></svg>
+              Open in Telegram</span></a>
+          </div>
+          <div class="hero-meta reveal-hero">
+            <span><b>8</b> checks</span><span class="sep"></span>
+            <span><b>~5s</b> per scan</span><span class="sep"></span>
+            <span><b>0</b> API keys stored</span>
+          </div>
+        </div>
+
+        <div class="hero-visual" aria-hidden="true">
+          <div class="radar">
+            <div class="radar-ring r1"></div>
+            <div class="radar-ring r2"></div>
+            <div class="radar-ring r3"></div>
+            <div class="radar-sweep"></div>
+            <div class="blip b1"></div><div class="blip b2"></div><div class="blip b3"></div>
+            <svg class="big-shield" viewBox="0 0 24 24">
+              <defs>
+                <linearGradient id="sg" x1="0" y1="0" x2="1" y2="1">
+                  <stop offset="0" stop-color="#5eead4"/><stop offset="1" stop-color="#38bdf8"/>
+                </linearGradient>
+              </defs>
+              <path class="shield-fill" d="M12 2 4 5v6c0 5 3.4 9.4 8 11 4.6-1.6 8-6 8-11V5l-8-3Z" />
+              <path class="shield-line" d="M12 2 4 5v6c0 5 3.4 9.4 8 11 4.6-1.6 8-6 8-11V5l-8-3Z" />
+              <path class="shield-check" d="m8.5 12 2.4 2.4L16 9.3" />
+            </svg>
+          </div>
+          <div class="chip chip-1"><i class="dot bad"></i>Firestore · <b>open write</b></div>
+          <div class="chip chip-2"><i class="dot ok"></i>Realtime DB · locked</div>
+          <div class="chip chip-3"><i class="dot warn"></i>Storage · <b>listable</b></div>
+          <div class="chip chip-4"><i class="dot ok"></i>Anonymous auth · off</div>
+        </div>
+      </div>
+
+      <a href="#problem" class="scroll-hint" aria-label="Scroll"><span></span></a>
+    </section>
+
+    <!-- MARQUEE -->
+    <section class="marquee-wrap" aria-label="Works with apps built using">
+      <p class="marquee-label">Made for apps shipped with</p>
+      <div class="marquee">
+        <div class="marquee-track">
+          <span>Cursor</span><span>Lovable</span><span>Bolt</span><span>v0</span><span>Replit</span>
+          <span>FlutterFlow</span><span>Firebase Studio</span><span>Claude Code</span><span>Windsurf</span><span>React Native</span><span>Flutter</span>
+          <span>Cursor</span><span>Lovable</span><span>Bolt</span><span>v0</span><span>Replit</span>
+          <span>FlutterFlow</span><span>Firebase Studio</span><span>Claude Code</span><span>Windsurf</span><span>React Native</span><span>Flutter</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- PROBLEM (scroll-scrubbed text) -->
+    <section class="problem" id="problem">
+      <p class="eyebrow">The problem</p>
+      <p class="scrub-text" id="scrubText">Test-mode rules left on. A public API key. One copy-pasted snippet from a tutorial. That's all it takes for a stranger to download your users table, wipe your orders, or fill your bucket with junk — and you won't know until the bill or the angry email arrives.</p>
+    </section>
+
+    <!-- DEMO TERMINAL -->
+    <section class="demo" id="demo">
+      <div class="section-head">
+        <p class="eyebrow">Live demo</p>
+        <h2 class="h2 split">Watch a scan in real time</h2>
+        <p class="lead">Every probe is read-only or cleans up after itself. Nothing in your app is touched.</p>
+      </div>
+      <div class="terminal reveal-up" id="terminal">
+        <div class="term-bar">
+          <i></i><i></i><i></i>
+          <span>vibeguard — scan demo-app</span>
+          <button class="term-replay" id="termReplay" title="Replay">↻ replay</button>
+        </div>
+        <div class="term-body" id="termBody"></div>
+        <div class="term-result" id="termResult">
+          <div class="tr-grade">F</div>
+          <div class="tr-info">
+            <div class="tr-score"><span id="trScore">0</span>/100</div>
+            <div class="tr-holes"><span id="trHoles">0</span> security holes found</div>
+          </div>
+          <a href="/app" class="btn btn-primary btn-sm magnetic"><span>Scan yours</span></a>
+        </div>
+      </div>
+    </section>
+
+    <!-- CHECKS -->
+    <section class="checks" id="checks">
+      <div class="section-head">
+        <p class="eyebrow">What we check</p>
+        <h2 class="h2 split">Eight ways your app gets owned</h2>
+        <p class="lead">The mistakes that ship in rushed and AI-generated apps — every one tested for real, not guessed.</p>
+      </div>
+      <div class="check-grid">
+        <article class="check-card tilt"><span class="sev critical">Critical</span><div class="cc-ico">✎</div><h3>Firestore writable by anyone</h3><p>Strangers can create, overwrite or delete your documents.</p></article>
+        <article class="check-card tilt"><span class="sev critical">Critical</span><div class="cc-ico">⚡</div><h3>Realtime DB writable by anyone</h3><p>Your whole JSON tree can be replaced with one request.</p></article>
+        <article class="check-card tilt"><span class="sev high">High</span><div class="cc-ico">👁</div><h3>Firestore readable by anyone</h3><p>Users, orders, messages — downloadable from the public API.</p></article>
+        <article class="check-card tilt"><span class="sev high">High</span><div class="cc-ico">⇣</div><h3>Realtime DB readable by anyone</h3><p>The entire database served as JSON to whoever asks.</p></article>
+        <article class="check-card tilt"><span class="sev high">High</span><div class="cc-ico">▤</div><h3>Storage bucket listable</h3><p>Uploaded files — IDs, invoices, photos — can be enumerated.</p></article>
+        <article class="check-card tilt"><span class="sev medium">Medium</span><div class="cc-ico">＋</div><h3>Open email sign-up</h3><p>Anyone can mint an account and pass every <code>auth != null</code> rule.</p></article>
+        <article class="check-card tilt"><span class="sev medium">Medium</span><div class="cc-ico">?</div><h3>Anonymous auth enabled</h3><p>A valid auth token with zero credentials.</p></article>
+        <article class="check-card tilt"><span class="sev low">Low</span><div class="cc-ico">⚿</div><h3>Unrestricted API key</h3><p>Key works from any origin — easy quota abuse.</p></article>
+      </div>
+    </section>
+
+    <!-- HOW -->
+    <section class="how" id="how">
+      <div class="section-head">
+        <p class="eyebrow">How it works</p>
+        <h2 class="h2 split">Three steps. Ten seconds.</h2>
+      </div>
+      <div class="steps">
+        <svg class="steps-line" viewBox="0 0 1000 20" preserveAspectRatio="none" aria-hidden="true">
+          <path id="stepsPath" d="M0 10 H1000" />
+        </svg>
+        <div class="step"><div class="step-num">1</div><h3>Paste your config</h3><p>The same <code>firebaseConfig</code> that already ships in your app's frontend. Your key is never saved.</p></div>
+        <div class="step"><div class="step-num">2</div><h3>We attack it (politely)</h3><p>Real unauthenticated requests against Firestore, RTDB, Storage and Auth — read-only or self-cleaning.</p></div>
+        <div class="step"><div class="step-num">3</div><h3>Fix with copy-paste</h3><p>Get a grade, every hole with proof, and ready security rules to paste into the Firebase console.</p></div>
+      </div>
+    </section>
+
+    <!-- BEFORE / AFTER -->
+    <section class="compare" id="compare">
+      <div class="section-head">
+        <p class="eyebrow">The fix</p>
+        <h2 class="h2 split">From wide open to locked down</h2>
+        <p class="lead">Keep scrolling — this is the kind of fix the full report hands you.</p>
+      </div>
+      <div class="diff" id="diff">
+        <div class="diff-head">
+          <span class="diff-file"><i></i>firestore.rules</span>
+          <span class="diff-status" id="diffStatus">test mode · wide open</span>
+          <span class="diff-grade"><b class="g-bad" id="gBad">F</b><b class="g-ok" id="gOk">A</b></span>
+        </div>
+        <div class="diff-body">
+          <span class="ln"><em>1</em>rules_version = <span class="s">'2'</span>;</span>
+          <span class="ln"><em>2</em>service cloud.firestore {</span>
+          <span class="ln"><em>3</em>  match /databases/{database}/documents {</span>
+          <span class="ln ln-del"><em>4</em>    match /{document=**} {</span>
+          <span class="ln ln-del"><em>5</em>      allow read, write: if true;</span>
+          <span class="ln ln-add"><em>4</em>    match /users/{uid} {</span>
+          <span class="ln ln-add"><em>5</em>      allow read, write: if request.auth.uid == uid;</span>
+          <span class="ln"><em>6</em>    }</span>
+          <span class="ln"><em>7</em>  }</span>
+          <span class="ln"><em>8</em>}</span>
+        </div>
+        <div class="diff-scan" aria-hidden="true"></div>
+      </div>
+    </section>
+
+    <!-- PRICING -->
+    <section class="pricing" id="pricing">
+      <div class="section-head">
+        <p class="eyebrow">Pricing</p>
+        <h2 class="h2 split">Know for free. Fix for less than lunch.</h2>
+      </div>
+      <div class="plans">
+        <div class="plan">
+          <h3>Free scan</h3>
+          <div class="price">$0</div>
+          <p class="plan-sub">Find out if you have a problem.</p>
+          <ul>
+            <li class="yes">Security grade &amp; score</li>
+            <li class="yes">How many holes, by severity</li>
+            <li class="no">Which holes exactly</li>
+            <li class="no">Proof &amp; copy-paste fixes</li>
+          </ul>
+          <a href="/app" class="btn btn-ghost btn-block magnetic"><span>Run free scan</span></a>
+        </div>
+        <div class="plan plan-pro">
+          <div class="plan-glow" aria-hidden="true"></div>
+          <div class="plan-badge">Most useful</div>
+          <h3>Full report</h3>
+          <div class="price"><span id="priceWeb">$9</span> <small>or ⭐ <span id="priceStars">450</span> in Telegram</small></div>
+          <p class="plan-sub">Every hole, explained and fixed. <span id="packScans">10</span> full scans.</p>
+          <ul>
+            <li class="yes">Everything in Free</li>
+            <li class="yes">Each hole + what an attacker can do</li>
+            <li class="yes">Proof: the exact request that got through</li>
+            <li class="yes">Ready-to-paste security rules</li>
+            <li class="yes">Re-scan to confirm the fix</li>
+          </ul>
+          <a href="/app" class="btn btn-primary btn-block magnetic" id="buyBtn"><span>Get full report</span></a>
+        </div>
+      </div>
+    </section>
+
+    <!-- TELEGRAM -->
+    <section class="telegram" id="telegram">
+      <div class="tg-copy">
+        <p class="eyebrow">Telegram Mini App</p>
+        <h2 class="h2 split">Scan from your pocket</h2>
+        <p class="lead">The whole scanner lives inside Telegram. Paste the config, tap Scan, pay with Stars in one tap — your key lands in the chat and the report unlocks instantly.</p>
+        <ul class="tg-list">
+          <li><span>⚡</span> One-tap Telegram Stars checkout</li>
+          <li><span>🔑</span> Key delivered to your chat, works on the web too</li>
+          <li><span>🕘</span> Your scan history synced to your account</li>
+        </ul>
+        <a href="/tg/" class="btn btn-primary btn-lg magnetic" id="tgOpenBtn"><span>Open the bot</span></a>
+      </div>
+      <div class="phone-wrap" aria-hidden="true">
+        <div class="phone" id="phone">
+          <div class="phone-notch"></div>
+          <div class="phone-screen">
+            <div class="ps-head"><span class="ps-back">✕</span><b>VibeGuard</b><span class="ps-dots">⋯</span></div>
+            <div class="ps-radar"><div class="ps-sweep"></div><svg viewBox="0 0 24 24"><path d="M12 2 4 5v6c0 5 3.4 9.4 8 11 4.6-1.6 8-6 8-11V5l-8-3Z"/></svg></div>
+            <div class="ps-grade"><span>F</span><small>0/100</small></div>
+            <div class="ps-count"><b>5</b> holes found</div>
+            <div class="ps-rows">
+              <div class="ps-row"><i class="c"></i><span></span></div>
+              <div class="ps-row"><i class="h"></i><span></span></div>
+              <div class="ps-row"><i class="h"></i><span></span></div>
+            </div>
+            <div class="ps-main">Unlock full report · ⭐ <span class="ps-stars">450</span></div>
+          </div>
+        </div>
+        <div class="float-star s1">⭐</div><div class="float-star s2">⭐</div><div class="float-star s3">⭐</div>
+      </div>
+    </section>
+
+    <!-- FAQ -->
+    <section class="faq" id="faq">
+      <div class="section-head">
+        <p class="eyebrow">FAQ</p>
+        <h2 class="h2 split">Questions, answered</h2>
+      </div>
+      <div class="faq-list">
+        <details class="faq-item reveal-up"><summary>Is it safe to paste my firebaseConfig?</summary><div class="faq-a"><p>Yes. That config is already public — it ships inside your app's JavaScript for anyone to read. VibeGuard uses it only for the scan and never stores the API key; only the project ID, the grade and findings are saved.</p></div></details>
+        <details class="faq-item reveal-up"><summary>Will the scan change or break my data?</summary><div class="faq-a"><p>No. Read checks only read. Write checks create a single <code>__vibeguard_probe__</code> entry and delete it immediately; the sign-up test creates a throwaway user and deletes it. Your real data is never touched.</p></div></details>
+        <details class="faq-item reveal-up"><summary>Can I scan someone else's app?</summary><div class="faq-a"><p>Only with permission. VibeGuard is built for checking projects you own or are authorized to test.</p></div></details>
+        <details class="faq-item reveal-up"><summary>What does the full report include?</summary><div class="faq-a"><p>Every hole found, what an attacker can do with it, the exact request that got through, and step-by-step fixes with security rules you can paste straight into the Firebase console. One purchase includes several full scans so you can re-check after fixing.</p></div></details>
+        <details class="faq-item reveal-up"><summary>How do I pay?</summary><div class="faq-a"><p>On the website, buy a license key and paste it under your report. In Telegram, tap Unlock and pay with Stars — the key is sent to your chat automatically and works on the website too.</p></div></details>
+        <details class="faq-item reveal-up"><summary>Do you support Supabase?</summary><div class="faq-a"><p>Firebase first. Supabase checks are on the roadmap.</p></div></details>
+      </div>
+    </section>
+
+    <!-- FINAL CTA -->
+    <section class="final">
+      <div class="final-rings" aria-hidden="true"><i></i><i></i><i></i></div>
+      <h2 class="final-title"><span class="shimmer">Lock it down.</span></h2>
+      <p class="lead">Ten seconds now, or a breach later.</p>
+      <a href="/app" class="btn btn-primary btn-lg magnetic"><span>Scan my app — free</span>
+        <svg viewBox="0 0 24 24" class="arrow"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <div class="brand small"><svg viewBox="0 0 24 24" class="brand-mark"><path d="M12 2 4 5v6c0 5 3.4 9.4 8 11 4.6-1.6 8-6 8-11V5l-8-3Z"/></svg><span>Vibe<b>Guard</b></span></div>
+    <nav><a href="/app">Scanner</a><a href="/tg/">Telegram</a><a href="/docs">API</a><a href="#faq">FAQ</a></nav>
+    <p>Scan only projects you own or are authorized to test.</p>
+  </footer>
+
+  <script src="/vendor/gsap.min.js"></script>
+  <script src="/vendor/ScrollTrigger.min.js"></script>
+  <script src="/landing.js"></script>
+</body>
+</html>
