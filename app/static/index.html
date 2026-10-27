@@ -3,10 +3,10 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>VibeGuard — Find the holes in your Firebase app</title>
-  <meta name="description" content="VibeGuard scans your Firebase / vibe-coded app for open database rules, public storage and weak auth in seconds — and tells you exactly how to fix them." />
-  <meta property="og:title" content="VibeGuard — Firebase security scanner" />
-  <meta property="og:description" content="Open Firestore? Public storage? Find out in 10 seconds. Free scan." />
+  <title>VibeGuard — Find the holes in your app</title>
+  <meta name="description" content="Paste your site URL. VibeGuard finds open Firebase and Supabase rules, leaked API keys, public .env files and weak auth in seconds — and shows exactly how to fix them." />
+  <meta property="og:title" content="VibeGuard — security scanner for vibe-coded apps" />
+  <meta property="og:description" content="Leaked OpenAI key? Supabase RLS off? Public .env? Paste your URL — find out in 10 seconds. Free." />
   <meta property="og:type" content="website" />
   <meta property="og:url" content="https://vibe-guard-6b9h.onrender.com/" />
   <meta property="og:image" content="https://vibe-guard-6b9h.onrender.com/og.png" />
@@ -19,6 +19,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/motion.css" />
   <link rel="stylesheet" href="/landing.css" />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%235eead4' d='M12 2 4 5v6c0 5 3.4 9.4 8 11 4.6-1.6 8-6 8-11V5l-8-3Z'/%3E%3C/svg%3E" />
 </head>
@@ -74,9 +75,9 @@
               Open in Telegram</span></a>
           </div>
           <div class="hero-meta reveal-hero">
-            <span><b>8</b> checks</span><span class="sep"></span>
-            <span><b>~5s</b> per scan</span><span class="sep"></span>
-            <span><b>0</b> API keys stored</span>
+            <span><b data-count-to="30" data-suffix="+">30+</b> checks</span><span class="sep"></span>
+            <span><b>~10s</b> per scan</span><span class="sep"></span>
+            <span><b>0</b> keys stored</span>
           </div>
         </div>
 
@@ -98,10 +99,35 @@
               <path class="shield-check" d="m8.5 12 2.4 2.4L16 9.3" />
             </svg>
           </div>
-          <div class="chip chip-1"><i class="dot bad"></i>Firestore · <b>open write</b></div>
-          <div class="chip chip-2"><i class="dot ok"></i>Realtime DB · locked</div>
-          <div class="chip chip-3"><i class="dot warn"></i>Storage · <b>listable</b></div>
-          <div class="chip chip-4"><i class="dot ok"></i>Anonymous auth · off</div>
+          <div class="hv-card" id="hvCard">
+            <div class="hv-bar">
+              <i></i><i></i><i></i>
+              <span class="hv-url"><svg viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg><span id="hvUrl"></span><b class="hv-caret"></b></span>
+            </div>
+            <div class="hv-stage">
+              <div class="hv-scan" id="hvScan">
+                <div class="hv-scan-top"><span class="hv-spin"></span><span>Scanning</span><span class="hv-time" id="hvTime">0.0s</span></div>
+                <div class="hv-progress"><i id="hvProg"></i></div>
+                <ol class="hv-log" id="hvLog"></ol>
+              </div>
+              <div class="hv-report" id="hvReport">
+                <div class="hv-top">
+                  <div class="hv-gauge">
+                    <svg viewBox="0 0 80 80"><circle class="hv-track" cx="40" cy="40" r="34"/><circle class="hv-fill" id="hvFill" cx="40" cy="40" r="34"/></svg>
+                    <b id="hvGrade">F</b>
+                  </div>
+                  <div class="hv-head">
+                    <div class="hv-holes"><span id="hvHoles">0</span> holes found</div>
+                    <div class="hv-stack" id="hvStack"></div>
+                  </div>
+                </div>
+                <div class="hv-sev" id="hvSev"></div>
+                <div class="hv-finds" id="hvFinds"></div>
+              </div>
+            </div>
+          </div>
+          <div class="chip chip-1"><i class="dot bad"></i>sk-proj-…a1B2 · <b>leaked</b></div>
+          <div class="chip chip-3"><i class="dot warn"></i>RLS off · <b>profiles</b></div>
         </div>
       </div>
 
@@ -137,12 +163,12 @@
       <div class="terminal reveal-up" id="terminal">
         <div class="term-bar">
           <i></i><i></i><i></i>
-          <span>vibeguard — scan demo-app</span>
+          <span>vibeguard — scan habit-tracker.netlify.app</span>
           <button class="term-replay" id="termReplay" title="Replay">↻ replay</button>
         </div>
         <div class="term-body" id="termBody"></div>
         <div class="term-result" id="termResult">
-          <div class="tr-grade">F</div>
+          <div class="tr-grade" id="trGrade">F</div>
           <div class="tr-info">
             <div class="tr-score"><span id="trScore">0</span>/100</div>
             <div class="tr-holes"><span id="trHoles">0</span> security holes found</div>
@@ -156,18 +182,69 @@
     <section class="checks" id="checks">
       <div class="section-head">
         <p class="eyebrow">What we check</p>
-        <h2 class="h2 split">Eight ways your app gets owned</h2>
+        <h2 class="h2 split">Thirty ways your app gets owned</h2>
         <p class="lead">The mistakes that ship in rushed and AI-generated apps — every one tested for real, not guessed.</p>
       </div>
-      <div class="check-grid">
-        <article class="check-card tilt"><span class="sev critical">Critical</span><div class="cc-ico">✎</div><h3>Firestore writable by anyone</h3><p>Strangers can create, overwrite or delete your documents.</p></article>
-        <article class="check-card tilt"><span class="sev critical">Critical</span><div class="cc-ico">⚡</div><h3>Realtime DB writable by anyone</h3><p>Your whole JSON tree can be replaced with one request.</p></article>
-        <article class="check-card tilt"><span class="sev high">High</span><div class="cc-ico">👁</div><h3>Firestore readable by anyone</h3><p>Users, orders, messages — downloadable from the public API.</p></article>
-        <article class="check-card tilt"><span class="sev high">High</span><div class="cc-ico">⇣</div><h3>Realtime DB readable by anyone</h3><p>The entire database served as JSON to whoever asks.</p></article>
-        <article class="check-card tilt"><span class="sev high">High</span><div class="cc-ico">▤</div><h3>Storage bucket listable</h3><p>Uploaded files — IDs, invoices, photos — can be enumerated.</p></article>
-        <article class="check-card tilt"><span class="sev medium">Medium</span><div class="cc-ico">＋</div><h3>Open email sign-up</h3><p>Anyone can mint an account and pass every <code>auth != null</code> rule.</p></article>
-        <article class="check-card tilt"><span class="sev medium">Medium</span><div class="cc-ico">?</div><h3>Anonymous auth enabled</h3><p>A valid auth token with zero credentials.</p></article>
-        <article class="check-card tilt"><span class="sev low">Low</span><div class="cc-ico">⚿</div><h3>Unrestricted API key</h3><p>Key works from any origin — easy quota abuse.</p></article>
+      <div class="bento" id="bento">
+        <article class="bento-card b-secrets">
+          <div class="bc-visual code-win" aria-hidden="true">
+            <div class="cw-line"><em>12</em><span class="k">const</span> ai = <span class="k">new</span> OpenAI({</div>
+            <div class="cw-line cw-hot"><em>13</em>  apiKey: <span class="s">"<span id="leakKey">sk-proj-8fK2…Qx9a</span>"</span>,<span class="cw-tag">CRITICAL · leaked</span></div>
+            <div class="cw-line"><em>14</em>  dangerouslyAllowBrowser: <span class="k">true</span></div>
+            <div class="cw-line"><em>15</em>});</div>
+            <div class="cw-line"><em>16</em><span class="c">// shipped to every visitor in /assets/index-4f1c.js</span></div>
+            <div class="cw-beam"></div>
+          </div>
+          <div class="bc-copy">
+            <span class="sev critical">Critical</span>
+            <h3>Leaked API keys</h3>
+            <p>OpenAI, Anthropic, Stripe, AWS, GitHub, SendGrid, database URLs and more — found in the JavaScript you ship to every visitor.</p>
+          </div>
+        </article>
+        <article class="bento-card b-supabase">
+          <div class="bc-visual sb-table" aria-hidden="true">
+            <div class="sb-head"><span>public.profiles</span><b class="sb-rls">RLS off</b></div>
+            <div class="sb-row"><i>1</i><span>a.mirzoyan@…</span><span>admin</span></div>
+            <div class="sb-row"><i>2</i><span>k.vardanyan@…</span><span>user</span></div>
+            <div class="sb-row"><i>3</i><span>t.hakobyan@…</span><span>user</span></div>
+            <div class="sb-row"><i>4</i><span>r.sargsyan@…</span><span>user</span></div>
+          </div>
+          <div class="bc-copy">
+            <span class="sev high">High · Critical</span>
+            <h3>Supabase RLS</h3>
+            <p>Tables readable or writable with the public anon key, public buckets, an exposed schema — and a <code>service_role</code> key in your frontend.</p>
+          </div>
+        </article>
+        <article class="bento-card b-firebase">
+          <div class="bc-visual fb-list" aria-hidden="true">
+            <div class="fb-item"><i></i>Firestore read</div>
+            <div class="fb-item"><i></i>Firestore write</div>
+            <div class="fb-item"><i></i>Realtime DB rules</div>
+            <div class="fb-item"><i></i>Storage listing</div>
+            <div class="fb-item"><i></i>Open sign-up</div>
+            <div class="fb-item"><i></i>Anonymous auth</div>
+            <div class="fb-item"><i></i>API key origin</div>
+          </div>
+          <div class="bc-copy">
+            <span class="sev high">High · Critical</span>
+            <h3>Firebase rules</h3>
+            <p>Test-mode Firestore and Realtime DB, listable Storage, open sign-up and anonymous auth, an unrestricted key.</p>
+          </div>
+        </article>
+        <article class="bento-card b-web">
+          <div class="bc-visual web-probe" aria-hidden="true">
+            <div class="wp-row"><span class="wp-m">GET</span><span class="wp-p">/.env</span><b class="wp-s bad">200</b><span class="wp-n">STRIPE_SECRET=sk_live_…</span></div>
+            <div class="wp-row"><span class="wp-m">GET</span><span class="wp-p">/.git/config</span><b class="wp-s ok">404</b><span class="wp-n">not served</span></div>
+            <div class="wp-row"><span class="wp-m">GET</span><span class="wp-p">/assets/index.js.map</span><b class="wp-s warn">200</b><span class="wp-n">source code readable</span></div>
+            <div class="wp-row"><span class="wp-m">HDR</span><span class="wp-p">Content-Security-Policy</span><b class="wp-s warn">—</b><span class="wp-n">missing</span></div>
+            <div class="wp-row"><span class="wp-m">HDR</span><span class="wp-p">Strict-Transport-Security</span><b class="wp-s warn">—</b><span class="wp-n">missing</span></div>
+          </div>
+          <div class="bc-copy">
+            <span class="sev critical">Critical · Low</span>
+            <h3>Exposed files &amp; headers</h3>
+            <p>A public <code>.env</code> or <code>.git</code>, database dumps, production source maps and missing security headers.</p>
+          </div>
+        </article>
       </div>
     </section>
 
@@ -239,7 +316,7 @@
           <div class="plan-glow" aria-hidden="true"></div>
           <div class="plan-badge">Most useful</div>
           <h3>Full report</h3>
-          <div class="price"><span id="priceWeb">$9</span> <small>or ⭐ <span id="priceStars">450</span> in Telegram</small></div>
+          <div class="price"><span id="priceWeb">$9</span> <small>or <span id="priceStars">450</span> Stars in Telegram</small></div>
           <p class="plan-sub">Every hole, explained and fixed. <span id="packScans">10</span> full scans.</p>
           <ul>
             <li class="yes">Everything in Free</li>
@@ -258,11 +335,11 @@
       <div class="tg-copy">
         <p class="eyebrow">Telegram Mini App</p>
         <h2 class="h2 split">Scan from your pocket</h2>
-        <p class="lead">The whole scanner lives inside Telegram. Paste the config, tap Scan, pay with Stars in one tap — your key lands in the chat and the report unlocks instantly.</p>
+        <p class="lead">The whole scanner lives inside Telegram. Send the bot your site link — or open the Mini App — and get your grade in seconds. Pay with Stars in one tap; your key lands in the chat and the report unlocks instantly.</p>
         <ul class="tg-list">
-          <li><span>⚡</span> One-tap Telegram Stars checkout</li>
-          <li><span>🔑</span> Key delivered to your chat, works on the web too</li>
-          <li><span>🕘</span> Your scan history synced to your account</li>
+          <li><span><svg viewBox="0 0 24 24"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></svg></span> One-tap Telegram Stars checkout</li>
+          <li><span><svg viewBox="0 0 24 24"><circle cx="8" cy="15" r="4"/><path d="m11 12 9-9M17 6l3 3"/></svg></span> Key delivered to your chat, works on the web too</li>
+          <li><span><svg viewBox="0 0 24 24"><path d="M12 7v5l3 2M3 12a9 9 0 1 0 3-6.7M3 4v4h4"/></svg></span> Send a link right in the chat — instant grade</li>
         </ul>
         <a href="/tg/" class="btn btn-primary btn-lg magnetic" id="tgOpenBtn"><span>Open the bot</span></a>
       </div>
@@ -270,7 +347,7 @@
         <div class="phone" id="phone">
           <div class="phone-notch"></div>
           <div class="phone-screen">
-            <div class="ps-head"><span class="ps-back">✕</span><b>VibeGuard</b><span class="ps-dots">⋯</span></div>
+            <div class="ps-head"><span class="ps-back">×</span><b>VibeGuard</b><span class="ps-dots">···</span></div>
             <div class="ps-radar"><div class="ps-sweep"></div><svg viewBox="0 0 24 24"><path d="M12 2 4 5v6c0 5 3.4 9.4 8 11 4.6-1.6 8-6 8-11V5l-8-3Z"/></svg></div>
             <div class="ps-grade"><span>F</span><small>0/100</small></div>
             <div class="ps-count"><b>5</b> holes found</div>
@@ -279,10 +356,10 @@
               <div class="ps-row"><i class="h"></i><span></span></div>
               <div class="ps-row"><i class="h"></i><span></span></div>
             </div>
-            <div class="ps-main">Unlock full report · ⭐ <span class="ps-stars">450</span></div>
+            <div class="ps-main">Unlock full report · <span class="ps-stars">450</span> Stars</div>
           </div>
         </div>
-        <div class="float-star s1">⭐</div><div class="float-star s2">⭐</div><div class="float-star s3">⭐</div>
+        <div class="float-star s1"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"/></svg></div><div class="float-star s2"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"/></svg></div><div class="float-star s3"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"/></svg></div>
       </div>
     </section>
 
@@ -293,10 +370,10 @@
         <h2 class="h2 split">Questions, answered</h2>
       </div>
       <div class="faq-list">
-        <details class="faq-item reveal-up"><summary>Is it safe to paste my firebaseConfig?</summary><div class="faq-a"><p>Yes. That config is already public — it ships inside your app's JavaScript for anyone to read. VibeGuard uses it only for the scan and never stores the API key; only the project ID, the grade and findings are saved.</p></div></details>
-        <details class="faq-item reveal-up"><summary>Will the scan change or break my data?</summary><div class="faq-a"><p>No. Read checks only read. Write checks create a single <code>__vibeguard_probe__</code> entry and delete it immediately; the sign-up test creates a throwaway user and deletes it. Your real data is never touched.</p></div></details>
+        <details class="faq-item reveal-up"><summary>Is it safe to paste my URL or firebaseConfig?</summary><div class="faq-a"><p>Yes. Your URL and the Firebase / Supabase config are already public — they ship inside your app's JavaScript for anyone to read. VibeGuard uses them only for the scan and never stores keys; only the project name, the grade and findings are saved.</p></div></details>
+        <details class="faq-item reveal-up"><summary>Will the scan change or break my data?</summary><div class="faq-a"><p>No. By default every check is read-only. Only if you tick <b>“This is my project”</b> does VibeGuard also run active tests: a single <code>__vibeguard_probe__</code> entry that is deleted immediately, and a throwaway sign-up that is removed. Your real data is never touched.</p></div></details>
         <details class="faq-item reveal-up"><summary>Can I scan someone else's app?</summary><div class="faq-a"><p>Only with permission. VibeGuard is built for checking projects you own or are authorized to test.</p></div></details>
-        <details class="faq-item reveal-up"><summary>What does the full report include?</summary><div class="faq-a"><p>Every hole found, what an attacker can do with it, the exact request that got through, and step-by-step fixes with security rules you can paste straight into the Firebase console. One purchase includes several full scans so you can re-check after fixing.</p></div></details>
+        <details class="faq-item reveal-up"><summary>What does the full report include?</summary><div class="faq-a"><p>Every hole found, what an attacker can do with it, the exact request that got through, and step-by-step fixes with security rules you can paste straight into the Firebase or Supabase console. One purchase includes several full scans so you can re-check after fixing.</p></div></details>
         <details class="faq-item reveal-up"><summary>How do I pay?</summary><div class="faq-a"><p>On the website, buy a license key and paste it under your report. In Telegram, tap Unlock and pay with Stars — the key is sent to your chat automatically and works on the website too.</p></div></details>
         <details class="faq-item reveal-up"><summary>Do you support Supabase?</summary><div class="faq-a"><p>Yes. VibeGuard checks Supabase Row Level Security on your tables (public read/write), public storage buckets, an exposed database schema, and the single worst mistake — a <code>service_role</code> key shipped in your frontend. Paste your Supabase URL + anon key, or just give us your site URL and we'll find it.</p></div></details>
         <details class="faq-item reveal-up"><summary>What else do you scan besides the database?</summary><div class="faq-a"><p>When you scan by URL, VibeGuard also sweeps your shipped JavaScript for leaked API keys (OpenAI, Anthropic, Stripe, AWS, GitHub, SendGrid, database URLs and more), and checks for a public <code>.env</code> or <code>.git</code>, production source maps, and missing security headers.</p></div></details>
@@ -321,6 +398,7 @@
 
   <script src="/vendor/gsap.min.js"></script>
   <script src="/vendor/ScrollTrigger.min.js"></script>
+  <script src="/motion.js"></script>
   <script src="/landing.js"></script>
 </body>
 </html>

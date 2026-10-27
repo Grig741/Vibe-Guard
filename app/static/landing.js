@@ -181,17 +181,17 @@
   const termBody = $("#termBody"), termResult = $("#termResult");
   const L = (...segs) => segs;
   const script = [
-    L(["p", "$ "], ["", "vibeguard scan demo-app"]),
-    L(["m", "→ resolving project "], ["u", "demo-app"], ["m", " … "], ["ok", "ok"]),
-    L(["m", "→ firestore  "], ["u", "GET  /users          "], ["m", "200  "], ["bad", "OPEN READ      ✗ HIGH"]),
-    L(["m", "→ firestore  "], ["u", "POST /__probe__      "], ["m", "200  "], ["bad", "OPEN WRITE     ✗ CRITICAL"], ["m", "  (probe deleted)"]),
-    L(["m", "→ rtdb       "], ["u", "GET  /.json          "], ["m", "401  "], ["ok", "denied         ✓"]),
-    L(["m", "→ rtdb       "], ["u", "PUT  /__probe__      "], ["m", "401  "], ["ok", "denied         ✓"]),
-    L(["m", "→ storage    "], ["u", "LIST demo-app bucket "], ["m", "200  "], ["warn", "LISTABLE       ✗ HIGH"]),
-    L(["m", "→ auth       "], ["u", "signUp(email)        "], ["m", "200  "], ["med", "OPEN SIGN-UP   ✗ MEDIUM"], ["m", " (user removed)"]),
-    L(["m", "→ auth       "], ["u", "signUp(anonymous)    "], ["m", "400  "], ["ok", "disabled       ✓"]),
-    L(["m", "→ apikey     "], ["u", "origin check         "], ["m", "—    "], ["low", "unrestricted   ✗ LOW"]),
-    L(["ok", "✓ scan complete in 2.1s"]),
+    L(["p", "$ "], ["", "vibeguard scan habit-tracker.netlify.app"]),
+    L(["m", "→ fetch      "], ["u", "GET  /                     "], ["m", "200  "], ["ok", "3 bundles · Vite"]),
+    L(["m", "→ secrets    "], ["u", "/assets/index-4f1c.js      "], ["m", "     "], ["bad", "OPENAI KEY     ✗ CRITICAL"]),
+    L(["m", "→ detect     "], ["u", "supabase · firebase config "], ["m", "     "], ["ok", "found"]),
+    L(["m", "→ supabase   "], ["u", "GET  /rest/v1/profiles     "], ["m", "200  "], ["bad", "RLS OFF        ✗ HIGH"]),
+    L(["m", "→ firestore  "], ["u", "GET  /users                "], ["m", "403  "], ["ok", "denied         ✓"]),
+    L(["m", "→ storage    "], ["u", "LIST avatars               "], ["m", "200  "], ["warn", "PUBLIC         ✗ HIGH"]),
+    L(["m", "→ files      "], ["u", "GET  /.env                 "], ["m", "200  "], ["bad", "EXPOSED        ✗ CRITICAL"]),
+    L(["m", "→ files      "], ["u", "GET  /.git/config          "], ["m", "404  "], ["ok", "not served     ✓"]),
+    L(["m", "→ headers    "], ["u", "CSP · HSTS                 "], ["m", "—    "], ["low", "missing        ✗ LOW"]),
+    L(["ok", "✓ scan complete in 6.4s · read-only"]),
   ];
   let termRun = 0;
 
@@ -227,6 +227,7 @@
     }
     termResult.classList.add("show");
     countTo($("#trHoles"), 5, 900);
+    if (window.VGMotion) VGMotion.scramble($("#trGrade"), "F", 700);
   }
 
   function countTo(el, to, ms) {
@@ -245,6 +246,139 @@
       if (entries[0].isIntersecting && !started) { started = true; runTerminal(); obs.disconnect(); }
     }, { threshold: .35 }).observe($("#terminal"));
     $("#termReplay").addEventListener("click", runTerminal);
+  }
+
+  /* ---------------- Hero: looping live scan ---------------- */
+  const SAMPLES = [
+    { url: "habit-tracker.netlify.app", stack: ["Vite", "Supabase"], grade: "F", score: 12, color: "var(--crit)", sev: [2, 1, 0, 1],
+      log: [["Fetching the page", "200"], ["Pulling 3 JS bundles", "1.2 MB"], ["Hunting leaked keys", "OPENAI KEY", 1], ["Supabase RLS", "RLS OFF", 1], ["Exposed files", ".env", 1], ["Security headers", "2 missing"]],
+      finds: [["critical", "OpenAI API key in your frontend"], ["critical", ".env is publicly downloadable"], ["high", "Table “profiles” readable by anyone"]] },
+    { url: "ai-notes.vercel.app", stack: ["Next.js", "Firebase"], grade: "D", score: 58, color: "var(--high)", sev: [0, 2, 1, 1],
+      log: [["Fetching the page", "200"], ["Pulling 7 JS bundles", "2.4 MB"], ["Hunting leaked keys", "clean"], ["Firestore rules", "OPEN READ", 1], ["Storage bucket", "LISTABLE", 1], ["Auth providers", "open sign-up"]],
+      finds: [["high", "Firestore readable by anyone"], ["high", "Storage bucket is listable"], ["medium", "Email sign-up is open"]] },
+    { url: "shop-demo.web.app", stack: ["React", "Firebase"], grade: "A", score: 94, color: "var(--ok)", sev: [0, 0, 0, 1],
+      log: [["Fetching the page", "200"], ["Pulling 2 JS bundles", "640 KB"], ["Hunting leaked keys", "clean"], ["Firestore rules", "locked"], ["Storage bucket", "private"], ["Security headers", "1 missing"]],
+      finds: [["pass", "Firestore blocks anonymous access"], ["pass", "No secret keys in the bundle"], ["low", "Content-Security-Policy missing"]] },
+  ];
+
+  function heroDemo() {
+    const card = $("#hvCard");
+    if (!card) return;
+    const urlEl = $("#hvUrl"), log = $("#hvLog"), prog = $("#hvProg"), time = $("#hvTime");
+    const fill = $("#hvFill"), gradeEl = $("#hvGrade"), holes = $("#hvHoles"), stackEl = $("#hvStack"), sevEl = $("#hvSev"), finds = $("#hvFinds");
+    const C = 213.6;
+    let visible = true;
+    new IntersectionObserver(([e]) => { visible = e.isIntersecting; }).observe(card);
+    const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+    const waitVisible = async () => { while (!visible || document.hidden) await sleep(300); };
+
+    function paintReport(sm, animate) {
+      fill.style.stroke = sm.color;
+      gradeEl.style.color = sm.color;
+      fill.style.strokeDashoffset = C;
+      const n = sm.sev.reduce((a, b) => a + b, 0);
+      stackEl.innerHTML = sm.stack.map((t, i) => `<span class="mv-pop" style="--d:${350 + i * 90}ms">${t}</span>`).join("");
+      const labels = ["Crit", "High", "Med", "Low"], colors = ["var(--crit)", "var(--high)", "var(--med)", "var(--low)"];
+      sevEl.innerHTML = sm.sev.map((v, i) => `<div class="mv" style="--d:${200 + i * 60}ms"><b style="color:${colors[i]}" data-count="${v}">${v}</b><small>${labels[i]}</small></div>`).join("");
+      finds.innerHTML = sm.finds.map(([sev, t], i) => `<div class="hv-find ${sev} mv" style="--d:${520 + i * 110}ms"><span class="t">${sev === "pass" ? "Pass" : sev}</span>${t}</div>`).join("");
+      if (!animate || !window.VGMotion) { gradeEl.textContent = sm.grade; holes.textContent = n; fill.style.strokeDashoffset = C * (1 - sm.score / 100); return; }
+      requestAnimationFrame(() => requestAnimationFrame(() => { fill.style.strokeDashoffset = C * (1 - sm.score / 100); }));
+      VGMotion.scramble(gradeEl, sm.grade, 650);
+      VGMotion.countUp(holes, n, 900);
+      sevEl.querySelectorAll("[data-count]").forEach((b, i) => setTimeout(() => VGMotion.countUp(b, +b.dataset.count, 700), 200 + i * 60));
+    }
+
+    if (reduce) { card.classList.add("report"); urlEl.textContent = SAMPLES[0].url; paintReport(SAMPLES[0], false); return; }
+
+    (async function loop() {
+      for (let k = 0; ; k = (k + 1) % SAMPLES.length) {
+        const sm = SAMPLES[k];
+        await waitVisible();
+        // 1. type the URL
+        card.className = "hv-card typing";
+        urlEl.textContent = "";
+        log.innerHTML = ""; prog.style.transform = "scaleX(0)"; time.textContent = "0.0s";
+        await sleep(400);
+        for (const ch of sm.url) { urlEl.textContent += ch; await sleep(38 + Math.random() * 40); }
+        await sleep(350);
+        // 2. scan log
+        card.className = "hv-card scanning";
+        const t0 = performance.now();
+        const tick = setInterval(() => { time.textContent = ((performance.now() - t0) / 1000).toFixed(1) + "s"; }, 100);
+        for (let i = 0; i < sm.log.length; i++) {
+          const [label, res, bad] = sm.log[i];
+          const li = document.createElement("li");
+          li.innerHTML = `<span class="ic"></span><span class="tx"></span><span class="r"></span>`;
+          log.appendChild(li);
+          if (window.VGMotion) VGMotion.scramble(li.querySelector(".tx"), label, 320); else li.querySelector(".tx").textContent = label;
+          prog.style.transform = `scaleX(${(i + 1) / sm.log.length})`;
+          await sleep(430 + Math.random() * 200);
+          li.classList.add(bad ? "bad" : "done");
+          li.querySelector(".r").textContent = res;
+        }
+        clearInterval(tick);
+        await sleep(450);
+        // 3. report
+        card.className = "hv-card report";
+        paintReport(sm, true);
+        await sleep(4800);
+        card.className = "hv-card";
+        await sleep(500);
+      }
+    })();
+  }
+  heroDemo();
+
+  /* ---------------- Bento: perpetual micro-loops (only while on screen) ---------------- */
+  function whileVisible(el, everyMs, fn) {
+    if (!el || reduce) return;
+    let timer = null;
+    new IntersectionObserver(([e]) => {
+      if (e.isIntersecting && !timer) { fn(); timer = setInterval(fn, everyMs); }
+      else if (!e.isIntersecting && timer) { clearInterval(timer); timer = null; }
+    }, { threshold: .2 }).observe(el);
+  }
+  // Secrets: the leaked key keeps re-decoding
+  const KEYS = ["sk-proj-8fK2…Qx9a", "sk-ant-api03-…7Hd", "sk_live_51N…v2Lq", "AKIAQ3…7XZP", "ghp_4mT9…Lk2w"];
+  let ki = 0;
+  whileVisible($(".b-secrets"), 2600, () => { ki = (ki + 1) % KEYS.length; if (window.VGMotion) VGMotion.scramble($("#leakKey"), KEYS[ki], 700); });
+  // Supabase: rows get read one after another
+  const sbRows = $$(".sb-row"); let sbi = 0;
+  whileVisible($(".b-supabase"), 650, () => {
+    sbRows.forEach((r, i) => r.classList.toggle("read", i <= sbi % (sbRows.length + 2) && sbi % (sbRows.length + 2) < sbRows.length));
+    sbi++;
+  });
+  // Firebase: checklist runs, two checks fail, then resets
+  const fbItems = $$(".fb-item"); const FB_BAD = [1, 3]; let fbi = 0;
+  whileVisible($(".b-firebase"), 520, () => {
+    const step = fbi % (fbItems.length + 4);
+    fbItems.forEach((it, i) => {
+      it.classList.remove("run", "ok", "bad");
+      if (step >= fbItems.length + 3) return;               // brief blank pause before looping
+      if (i < step) it.classList.add(FB_BAD.includes(i) ? "bad" : "ok");
+      else if (i === step) it.classList.add("run");
+    });
+    fbi++;
+  });
+  // Website: probes light up row by row
+  const wpRows = $$(".wp-row"); let wpi = 0;
+  whileVisible($(".b-web"), 700, () => {
+    const step = wpi % (wpRows.length + 3);
+    wpRows.forEach((r, i) => r.classList.toggle("on", i < step || step >= wpRows.length));
+    wpi++;
+  });
+
+  /* ---------------- Count-up on hero meta, ripple + spotlight ---------------- */
+  if (window.VGMotion) {
+    $$("[data-count-to]").forEach((el) => {
+      if (!reduce) el.textContent = "0" + (el.dataset.suffix || "");
+      new IntersectionObserver(([e], o) => {
+        if (!e.isIntersecting) return; o.disconnect();
+        setTimeout(() => VGMotion.countUp(el, +el.dataset.countTo, 1400, el.dataset.suffix || ""), 900);
+      }).observe(el);
+    });
+    $$(".btn, .term-replay").forEach((b) => b.classList.add("rp"));
+    VGMotion.spotlight($$(".bento-card, .plan, .terminal, .diff, .faq-item"));
   }
 
   /* ---------------- FAQ smooth open ---------------- */
@@ -289,7 +423,8 @@
     .fromTo(".shield-line", { strokeDashoffset: 70 }, { strokeDashoffset: 0, duration: 1.8, ease: "power2.inOut" }, .4)
     .fromTo(".shield-check", { strokeDashoffset: 12 }, { strokeDashoffset: 0, duration: .7, ease: "power2.out" }, 1.8)
     .from(".shield-fill", { opacity: 0, duration: 1 }, 1.4)
-    .from(".chip", { scale: .5, opacity: 0, y: 20, duration: .8, stagger: .15, ease: "back.out(1.8)" }, 1)
+    .from(".hv-card", { y: 40, opacity: 0, scale: .94, duration: 1.2, ease: "expo.out" }, .5)
+    .from(".chip", { scale: .5, opacity: 0, y: 20, duration: .8, stagger: .15, ease: "back.out(1.8)" }, 1.3)
     .from(".nav", { y: -40, opacity: 0, duration: .8 }, 0);
 
   // Hero parallax on scroll
@@ -329,11 +464,10 @@
     });
   }
 
-  // Check cards — staggered 3D flip-in
-  gsap.from(".check-card", {
-    y: 70, opacity: 0, rotateX: -35, transformOrigin: "50% 100%", duration: 1, stagger: { each: .08, grid: "auto", from: "start" },
-    ease: "power3.out", clearProps: "transform",
-    scrollTrigger: { trigger: ".check-grid", start: "top 82%", once: true },
+  // Bento cards — staggered rise
+  gsap.from(".bento-card", {
+    y: 70, opacity: 0, duration: 1, stagger: .1, ease: "power3.out", clearProps: "transform",
+    scrollTrigger: { trigger: ".bento", start: "top 82%", once: true },
   });
 
   // How it works — line draws with scroll, steps pop

@@ -115,7 +115,7 @@ async def scan_url(raw_url: str, active: bool = False) -> dict:
                     "title": f"Exposed secret: {hit.name}",
                     "severity": hit.severity,
                     "status": "vulnerable",
-                    "description": f"A {hit.name} is shipped in your public frontend "
+                    "description": f"{'An' if hit.name[0].lower() in 'aeio' else 'A'} {hit.name} is shipped in your public frontend "
                                    f"({hit.masked}). {hit.impact}",
                     "remediation": SECRET_REMEDIATION,
                     "evidence": f"Found {hit.masked} in {_short(hit.where or where)}.",
@@ -292,7 +292,7 @@ async def _demo_result(started: float) -> dict:
     secret = [{
         "check_id": "secret_openai", "title": "Exposed secret: OpenAI API key",
         "severity": "critical", "status": "vulnerable",
-        "description": "A OpenAI API key is shipped in your public frontend (sk-proj-…a1B2). "
+        "description": "An OpenAI API key is shipped in your public frontend (sk-proj-…a1B2). "
                        "Anyone can call OpenAI on your bill.",
         "remediation": SECRET_REMEDIATION,
         "evidence": "Found sk-proj-…a1B2 in /assets/index-4f1c.js.", "weight": 45,
