@@ -29,6 +29,29 @@ async def run_scan(cfg: FirebaseConfig, extra_collections: list[str]) -> dict:
     raw: list[dict] = []
     error: str | None = None
 
+    # Built-in demo project: no network probes, a realistic vulnerable result.
+    if (cfg.projectId or "").strip().lower() == "vibeguard-demo":
+        import asyncio
+        await asyncio.sleep(1.5)
+        raw = [
+            {"check_id": "firestore_public_read", "status": "vulnerable", "evidence": "GET on collection 'users' returned 200 without authentication."},
+            {"check_id": "firestore_public_write", "status": "vulnerable", "evidence": "Unauthenticated POST created a document (probe document deleted)."},
+            {"check_id": "rtdb_public_read", "status": "ok", "evidence": "Realtime Database denied the unauthenticated read."},
+            {"check_id": "rtdb_public_write", "status": "ok", "evidence": "Realtime Database denied the unauthenticated write."},
+            {"check_id": "storage_public_list", "status": "vulnerable", "evidence": "Objects in bucket 'vibeguard-demo.appspot.com' are listable without authentication."},
+            {"check_id": "auth_open_signup", "status": "vulnerable", "evidence": "Email/password sign-up created an account without approval (test user removed)."},
+            {"check_id": "auth_anonymous_open", "status": "ok", "evidence": "Anonymous authentication is disabled."},
+            {"check_id": "apikey_unrestricted", "status": "vulnerable", "evidence": "API key accepted requests from a non-browser origin (no referrer restriction)."},
+        ]
+        findings = _build_findings(raw)
+        score, counts = _score(findings)
+        return {
+            "project_id": cfg.projectId, "status": "completed", "score": score, "grade": grade_for(score),
+            "critical": counts["critical"], "high": counts["high"], "medium": counts["medium"],
+            "low": counts["low"], "passed": counts["passed"],
+            "duration_ms": int((time.perf_counter() - started) * 1000), "error": None, "findings": findings,
+        }
+
     limits = httpx.Limits(max_connections=10)
     timeout = httpx.Timeout(SCAN_TIMEOUT)
     try:
