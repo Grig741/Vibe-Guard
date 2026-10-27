@@ -82,10 +82,9 @@ CRYPTOPAY_ASSETS = os.getenv("CRYPTOPAY_ASSETS", "USDT,TON,BTC,ETH,LTC,TRX,USDC,
 MANUAL_DETAILS = os.getenv("MANUAL_DETAILS", "").replace("\\n", "\n").strip()
 # Your own Telegram user ID — manual orders arrive to you with ✅/❌ buttons.
 # Send /myid to the bot to find it.
-try:
-    ADMIN_TG_ID = int(os.getenv("ADMIN_TG_ID", "0").strip() or 0)
-except ValueError:
-    ADMIN_TG_ID = 0
+import re as _re
+_m = _re.search(r"\d{5,}", os.getenv("ADMIN_TG_ID", ""))  # tolerate "ID: 123…" pasted from /myid
+ADMIN_TG_ID = int(_m.group()) if _m else 0
 
 APP_NAME = "VibeGuard"
 APP_VERSION = "1.2.0"
