@@ -382,3 +382,13 @@ textarea::placeholder { color: var(--text-faint); }
 }
 .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 .toast.err { border-color: var(--crit); }
+
+/* ---- Mode tabs (URL vs config) ---- */
+.mode-tabs { display:flex; gap:6px; margin:4px 0 14px; background:rgba(255,255,255,.03); padding:4px; border-radius:12px; border:1px solid var(--line, rgba(255,255,255,.08)); }
+.mode-tab { flex:1; padding:9px 10px; border:0; border-radius:9px; background:transparent; color:var(--muted,#8aa); font:600 13px/1 var(--sans,inherit); cursor:pointer; transition:.15s; }
+.mode-tab:hover { color:#fff; }
+.mode-tab.active { background:rgba(94,234,212,.14); color:var(--accent,#5eead4); }
+
+/* ---- Stack badges on the report ---- */
+.stack-row { display:flex; flex-wrap:wrap; gap:6px; margin:8px 0 2px; }
+.stack-badge { font:600 11px/1 var(--mono,monospace); padding:4px 8px; border-radius:999px; background:rgba(94,234,212,.1); color:var(--accent,#5eead4); border:1px solid rgba(94,234,212,.25); letter-spacing:.02em; }

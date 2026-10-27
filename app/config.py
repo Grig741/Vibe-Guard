@@ -87,4 +87,4 @@ _m = _re.search(r"\d{5,}", os.getenv("ADMIN_TG_ID", ""))  # tolerate "ID: 123…
 ADMIN_TG_ID = int(_m.group()) if _m else 0
 
 APP_NAME = "VibeGuard"
-APP_VERSION = "1.2.0"
+APP_VERSION = "2.0.0"

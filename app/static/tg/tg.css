@@ -224,3 +224,10 @@ textarea:focus, .inp:focus { outline: none; border-color: var(--accent); box-sha
 .toast.err { border-color: var(--crit); }
 
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; } }
+
+/* Mode tabs + stack badges */
+.mode-tabs{display:flex;gap:5px;margin:0 0 12px;background:rgba(255,255,255,.04);padding:4px;border-radius:12px}
+.mode-tab{flex:1;padding:9px;border:0;border-radius:9px;background:transparent;color:var(--muted,#8aa);font:700 13px/1 inherit;cursor:pointer}
+.mode-tab.active{background:rgba(94,234,212,.16);color:var(--accent,#5eead4)}
+.stack-row{display:flex;flex-wrap:wrap;gap:5px;margin-top:8px;justify-content:center}
+.stack-badge{font:600 10px/1 var(--mono,monospace);padding:4px 7px;border-radius:999px;background:rgba(94,234,212,.12);color:var(--accent,#5eead4);border:1px solid rgba(94,234,212,.25)}

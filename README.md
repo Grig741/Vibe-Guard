@@ -1,26 +1,43 @@
 # VibeGuard 🛡️
 
-Security scanner for **Firebase / vibe-coded apps**. Paste your `firebaseConfig`
-and VibeGuard probes your project the way an attacker would — then grades it and
-tells you exactly what to fix.
+Security scanner for **Firebase, Supabase & vibe-coded apps**. Give it your
+app's **URL** — or paste a `firebaseConfig` / Supabase key — and VibeGuard
+probes your project the way an attacker would, then grades it and tells you
+exactly what to fix.
+
+Three ways to scan:
+
+* **URL** — VibeGuard fetches your live site, finds the Firebase/Supabase config
+  in your bundle, sweeps the shipped JS for leaked secrets, and runs every
+  applicable check.
+* **firebaseConfig** — the classic deep Firebase scan.
+* **Supabase URL + anon key** — RLS and storage checks.
 
 It catches the mistakes that ship in rushed/AI-generated apps:
 
 | Check | Severity |
 |---|---|
-| Firestore readable by anyone | High |
-| Firestore writable by anyone | Critical |
-| Realtime Database open read | High |
-| Realtime Database open write | Critical |
+| **Firebase** | |
+| Firestore readable / writable by anyone | High / Critical |
+| Realtime Database open read / write | High / Critical |
 | Storage bucket files listable | High |
-| Open email/password sign-up | Medium |
-| Anonymous auth enabled | Medium |
+| Open email/password sign-up · anonymous auth | Medium |
 | Unrestricted web API key | Low |
+| **Supabase** | |
+| `service_role` key shipped in the frontend | Critical |
+| Table readable / writable by the anon key (RLS off) | High / Critical |
+| Public storage bucket · exposed schema | High / Medium |
+| **Website (URL scan)** | |
+| Leaked API keys in the frontend (OpenAI, Stripe, AWS, GitHub…) | Critical–Medium |
+| Public `.env` / `.git` / DB dumps | Critical |
+| Production source maps · missing security headers | Low |
 
-All probes are **read-only or self-cleaning** (write tests create a
+All active probes are **read-only or self-cleaning** (write tests create a
 `__vibeguard_probe__` entry and delete it; auth tests create a throwaway user
-and delete it). The API key is **never stored** — only the project ID, the score
-and the findings are saved.
+and delete it). URL scans only ever issue GETs plus those self-cleaning probes,
+and every outbound request is **SSRF-guarded** — private, loopback and
+link-local addresses are refused on every redirect hop. Keys are **never
+stored** — only the project ID, the score and the findings are saved.
 
 > ⚠️ Scan only Firebase projects you own or are explicitly authorized to test.
 

@@ -33,6 +33,8 @@ class Scan(Base):
     project_id = Column(String(255), index=True, nullable=False)
     # What we targeted. We never store the apiKey itself.
     target_label = Column(String(255), nullable=True)
+    scan_type = Column(String(16), default="firebase", server_default="firebase", nullable=False)  # firebase|supabase|url
+    stack = Column(Text, nullable=True)  # comma-joined detected tech
     status = Column(String(20), default="completed", nullable=False)  # completed | error
     score = Column(Integer, default=0, nullable=False)       # 0..100 (higher = safer)
     grade = Column(String(2), default="F", nullable=False)   # A..F

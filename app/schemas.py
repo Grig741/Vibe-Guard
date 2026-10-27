@@ -17,7 +17,11 @@ class FirebaseConfig(BaseModel):
 
 
 class ScanRequest(BaseModel):
-    config: FirebaseConfig
+    # Either paste a firebaseConfig object (config) OR a raw target string
+    # (a website URL, or Supabase URL + anon key). `target` is the new smart
+    # input; `config` is kept for the original Firebase flow and the API.
+    config: Optional[FirebaseConfig] = None
+    target: Optional[str] = None
     # Extra collection names to probe in Firestore besides the defaults.
     collections: List[str] = Field(default_factory=list)
     label: Optional[str] = None
@@ -47,6 +51,7 @@ class ScanSummary(BaseModel):
     id: str
     project_id: str
     target_label: Optional[str] = None
+    scan_type: str = "firebase"
     status: str
     score: int
     grade: str
@@ -65,6 +70,7 @@ class ScanDetail(ScanSummary):
     error: Optional[str] = None
     issues: int = 0                 # number of vulnerabilities found
     locked: bool = True
+    stack: List[str] = Field(default_factory=list)
     findings: List[FindingOut] = Field(default_factory=list)
 
 

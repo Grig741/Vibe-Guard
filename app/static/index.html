@@ -55,14 +55,14 @@
 
       <div class="hero-inner">
         <div class="hero-copy">
-          <div class="pill reveal-hero"><span class="pulse-dot"></span> Firebase security scanner</div>
+          <div class="pill reveal-hero"><span class="pulse-dot"></span> Firebase · Supabase · website security scanner</div>
           <h1 class="hero-title">
             <span class="line"><span class="word">Find</span> <span class="word">the</span> <span class="word">holes</span></span>
             <span class="line"><span class="word">in</span> <span class="word">your</span> <span class="word grad">app</span></span>
             <span class="line"><span class="word">before</span> <span class="word">someone</span> <span class="word">else</span> <span class="word">does.</span></span>
           </h1>
           <p class="hero-sub reveal-hero">
-            Paste your <code>firebaseConfig</code>. VibeGuard probes
+            Drop in your app's URL, <code>firebaseConfig</code> or Supabase key. VibeGuard probes
             <span class="typer"><span id="typer">Firestore</span><span class="caret">|</span></span>
             the way an attacker would — and tells you exactly how to close every hole.
           </p>
@@ -110,7 +110,7 @@
 
     <!-- MARQUEE -->
     <section class="marquee-wrap" aria-label="Works with apps built using">
-      <p class="marquee-label">If your app uses Firebase, VibeGuard scans it — whatever you built it with</p>
+      <p class="marquee-label">If your app uses Firebase or Supabase, VibeGuard scans it — whatever you built it with</p>
       <div class="marquee">
         <div class="marquee-track">
           <span>Cursor</span><span>Claude Code</span><span>Firebase Studio</span><span>FlutterFlow</span><span>Replit</span>
@@ -181,9 +181,9 @@
         <svg class="steps-line" viewBox="0 0 1000 20" preserveAspectRatio="none" aria-hidden="true">
           <path id="stepsPath" d="M0 10 H1000" />
         </svg>
-        <div class="step"><div class="step-num">1</div><h3>Paste your config</h3><p>The same <code>firebaseConfig</code> that already ships in your app's frontend. Your key is never saved.</p></div>
-        <div class="step"><div class="step-num">2</div><h3>We attack it (politely)</h3><p>Real unauthenticated requests against Firestore, RTDB, Storage and Auth — read-only or self-cleaning.</p></div>
-        <div class="step"><div class="step-num">3</div><h3>Fix with copy-paste</h3><p>Get a grade, every hole with proof, and ready security rules to paste into the Firebase console.</p></div>
+        <div class="step"><div class="step-num">1</div><h3>Give us your app</h3><p>Just the live URL — or paste your <code>firebaseConfig</code> / Supabase key. We find the backend from your site automatically. Your keys are never saved.</p></div>
+        <div class="step"><div class="step-num">2</div><h3>We attack it (politely)</h3><p>Real unauthenticated requests against Firestore, RTDB, Storage, Supabase RLS and Auth — read-only or self-cleaning — plus a sweep for leaked API keys and exposed files.</p></div>
+        <div class="step"><div class="step-num">3</div><h3>Fix with copy-paste</h3><p>Get a grade, every hole with proof, and ready security rules to paste into the Firebase / Supabase console.</p></div>
       </div>
     </section>
 
@@ -298,7 +298,8 @@
         <details class="faq-item reveal-up"><summary>Can I scan someone else's app?</summary><div class="faq-a"><p>Only with permission. VibeGuard is built for checking projects you own or are authorized to test.</p></div></details>
         <details class="faq-item reveal-up"><summary>What does the full report include?</summary><div class="faq-a"><p>Every hole found, what an attacker can do with it, the exact request that got through, and step-by-step fixes with security rules you can paste straight into the Firebase console. One purchase includes several full scans so you can re-check after fixing.</p></div></details>
         <details class="faq-item reveal-up"><summary>How do I pay?</summary><div class="faq-a"><p>On the website, buy a license key and paste it under your report. In Telegram, tap Unlock and pay with Stars — the key is sent to your chat automatically and works on the website too.</p></div></details>
-        <details class="faq-item reveal-up"><summary>Do you support Supabase?</summary><div class="faq-a"><p>Firebase first. Supabase checks are on the roadmap.</p></div></details>
+        <details class="faq-item reveal-up"><summary>Do you support Supabase?</summary><div class="faq-a"><p>Yes. VibeGuard checks Supabase Row Level Security on your tables (public read/write), public storage buckets, an exposed database schema, and the single worst mistake — a <code>service_role</code> key shipped in your frontend. Paste your Supabase URL + anon key, or just give us your site URL and we'll find it.</p></div></details>
+        <details class="faq-item reveal-up"><summary>What else do you scan besides the database?</summary><div class="faq-a"><p>When you scan by URL, VibeGuard also sweeps your shipped JavaScript for leaked API keys (OpenAI, Anthropic, Stripe, AWS, GitHub, SendGrid, database URLs and more), and checks for a public <code>.env</code> or <code>.git</code>, production source maps, and missing security headers.</p></div></details>
       </div>
     </section>
 

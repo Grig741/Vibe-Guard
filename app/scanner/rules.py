@@ -172,6 +172,146 @@ CHECKS = {
             "own domains, and restrict which APIs the key may call."
         ),
     ),
+
+    # ---- Supabase ----
+    "supabase_service_key_exposed": CheckMeta(
+        id="supabase_service_key_exposed",
+        title="Supabase service_role key is in the frontend",
+        severity="critical",
+        weight=55,
+        description=(
+            "A service_role key was found in your shipped JavaScript. This key "
+            "bypasses every Row Level Security policy — whoever reads it has full "
+            "read/write access to your entire database and storage, as admin."
+        ),
+        remediation=(
+            "Treat this key as compromised: in Supabase → Project Settings → API, "
+            "roll (regenerate) the service_role key immediately. Never put it in "
+            "frontend code or env vars prefixed NEXT_PUBLIC_/VITE_. Use it only on a "
+            "server. In the browser use the anon (publishable) key, protected by RLS."
+        ),
+    ),
+    "supabase_rls_read": CheckMeta(
+        id="supabase_rls_read",
+        title="Supabase table readable by anyone",
+        severity="high",
+        weight=25,
+        description=(
+            "A table returned rows to the public anon key. Row Level Security is "
+            "off or allows anonymous SELECT, so anyone can read that table's data "
+            "straight from the REST API."
+        ),
+        remediation=(
+            "In Supabase → Authentication → Policies, enable RLS on the table and "
+            "add a policy that scopes reads, e.g.\n"
+            "  alter table public.<table> enable row level security;\n"
+            "  create policy \"own rows\" on public.<table>\n"
+            "    for select using (auth.uid() = user_id);\n"
+            "Never leave a table with RLS disabled in production."
+        ),
+    ),
+    "supabase_rls_write": CheckMeta(
+        id="supabase_rls_write",
+        title="Supabase table writable by anyone",
+        severity="critical",
+        weight=42,
+        description=(
+            "The public anon key could insert a row. Unauthenticated visitors can "
+            "write to your database — spam, tamper with or inflate your data and "
+            "your bill."
+        ),
+        remediation=(
+            "Enable RLS and gate writes behind the signed-in user:\n"
+            "  create policy \"insert own\" on public.<table>\n"
+            "    for insert with check (auth.uid() = user_id);\n"
+            "Add matching update/delete policies; never ship a table with RLS off."
+        ),
+    ),
+    "supabase_storage_public": CheckMeta(
+        id="supabase_storage_public",
+        title="Supabase storage bucket is public",
+        severity="high",
+        weight=22,
+        description=(
+            "A storage bucket lists its objects to the anon key. Uploaded files can "
+            "be enumerated and downloaded by anyone."
+        ),
+        remediation=(
+            "In Supabase → Storage, turn the bucket Private unless it is meant to be "
+            "public, and add storage policies that restrict object access to the "
+            "owner (auth.uid())."
+        ),
+    ),
+    "supabase_schema_exposed": CheckMeta(
+        id="supabase_schema_exposed",
+        title="Database schema is readable by anyone",
+        severity="medium",
+        weight=10,
+        description=(
+            "The anon key can read the PostgREST OpenAPI spec — a full list of your "
+            "tables, views and columns. On its own it's just information, but it "
+            "hands an attacker a complete map of your database to probe."
+        ),
+        remediation=(
+            "This is expected when RLS is correctly enabled (the schema is listed "
+            "but the data is protected). Make sure RLS is on for every table so the "
+            "map leads nowhere, or restrict the exposed schema under Settings → API."
+        ),
+    ),
+
+    # ---- Website (passive) ----
+    "web_exposed_files": CheckMeta(
+        id="web_exposed_files",
+        title="Secret files are publicly downloadable",
+        severity="critical",
+        weight=48,
+        description=(
+            "Files that should never be served — like .env or the .git directory — "
+            "are downloadable from your site. These typically contain API keys, "
+            "database passwords or your full source history."
+        ),
+        remediation=(
+            "Stop deploying these files: add .env, .git and backups to .gitignore "
+            "and to your host's ignore/deploy settings. If a secret was served, "
+            "rotate it now. On static hosts, ensure the build output folder contains "
+            "no dotfiles or dumps."
+        ),
+    ),
+    "web_source_maps": CheckMeta(
+        id="web_source_maps",
+        title="Source maps are shipped to production",
+        severity="low",
+        weight=5,
+        description=(
+            "Your production JavaScript references .map source maps, which let "
+            "anyone reconstruct your original, unminified source code — including "
+            "comments and any secrets left in it."
+        ),
+        remediation=(
+            "Disable source maps in your production build (e.g. Vite "
+            "`build.sourcemap: false`, Next.js `productionBrowserSourceMaps: false`, "
+            "CRA `GENERATE_SOURCEMAP=false`), or stop uploading the .map files."
+        ),
+    ),
+    "web_security_headers": CheckMeta(
+        id="web_security_headers",
+        title="Security headers are missing",
+        severity="low",
+        weight=6,
+        description=(
+            "Response is missing one or more hardening headers (Content-Security-"
+            "Policy, HSTS, X-Content-Type-Options, X-Frame-Options). These are the "
+            "browser-side defenses against XSS, clickjacking and MIME attacks."
+        ),
+        remediation=(
+            "Add the headers at your host/CDN. A solid baseline:\n"
+            "  Content-Security-Policy: default-src 'self';\n"
+            "  Strict-Transport-Security: max-age=31536000; includeSubDomains\n"
+            "  X-Content-Type-Options: nosniff\n"
+            "  X-Frame-Options: DENY\n"
+            "On Netlify/Vercel set these in _headers / vercel.json."
+        ),
+    ),
 }
 
 # Titles shown when a check PASSES, so a green row never reads like a problem.
@@ -184,7 +324,27 @@ PASS_TITLES = {
     "auth_open_signup": "Self-serve email sign-up is disabled",
     "auth_anonymous_open": "Anonymous sign-in is disabled",
     "apikey_unrestricted": "Web API key is referrer-restricted",
+    "supabase_service_key_exposed": "No service_role key in the frontend",
+    "supabase_rls_read": "Supabase blocks anonymous reads (RLS on)",
+    "supabase_rls_write": "Supabase blocks anonymous writes (RLS on)",
+    "supabase_storage_public": "Supabase storage is not publicly listable",
+    "supabase_schema_exposed": "Database schema is not exposed",
+    "web_exposed_files": "No secret files are publicly served",
+    "web_source_maps": "No source maps shipped to production",
+    "web_security_headers": "Security headers are present",
 }
+
+# Leaked-secret findings don't come from this catalog — their title/severity/
+# fix are built from detect.SECRET_RULES by the engine. This is the shared
+# remediation text for all of them.
+SECRET_REMEDIATION = (
+    "This secret is in your public frontend, so treat it as leaked:\n"
+    "1. Revoke / rotate it now in the provider's dashboard.\n"
+    "2. Move the call that needs it to a server (an API route, a Cloud Function, "
+    "an edge function) and keep the key in a server-only env var.\n"
+    "3. Never prefix a real secret with NEXT_PUBLIC_, VITE_ or REACT_APP_ — "
+    "those are bundled into the browser."
+)
 
 
 # ---- Scoring -----------------------------------------------------------------

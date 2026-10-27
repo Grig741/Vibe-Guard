@@ -7,6 +7,9 @@ const els = {
   label: $("#labelInput"),
   collections: $("#collectionsInput"),
   parseStatus: $("#parseStatus"),
+  modeTabs: $("#modeTabs"),
+  inputLabel: $("#inputLabel"),
+  inputHint: $("#inputHint"),
   scanBtn: $("#scanBtn"),
   reportEmpty: $("#reportEmpty"),
   reportContent: $("#reportContent"),
@@ -21,6 +24,9 @@ const GRADE_COLOR = { A: "var(--pass)", B: "var(--pass)", C: "var(--med)", D: "v
 
 let pricing = { price: "$9", payment_url: null };
 let currentScan = null;
+let mode = "url"; // "url" | "config"
+
+const URL_RE = /^(https?:\/\/)?([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,24}(:\d{2,5})?([/?#]\S*)?$/i;
 
 /* ---------- Safe localStorage ---------- */
 
@@ -67,25 +73,65 @@ function parseFirebaseConfig(raw) {
   }
 }
 
+// Returns what will be scanned: { kind:"url", url } | { kind:"config", config } | null
 function refreshParseStatus() {
-  const raw = els.config.value;
-  if (!raw.trim()) { els.parseStatus.textContent = ""; els.parseStatus.className = "parse-status"; return null; }
-  const { config, error } = parseFirebaseConfig(raw);
-  const fail = error || (!config || typeof config !== "object" ? "Invalid config." : !config.projectId ? "Missing projectId." : null);
-  if (fail) {
-    els.parseStatus.textContent = "✗ " + fail;
-    els.parseStatus.className = "parse-status err";
-    return null;
+  const raw = els.config.value.trim();
+  if (!raw) { els.parseStatus.textContent = ""; els.parseStatus.className = "parse-status"; return null; }
+
+  // A single URL-looking token → URL scan (unless it clearly is a config object).
+  const firstTok = raw.split(/\s+/)[0];
+  const hasObject = raw.includes("{");
+  const looksUrl = !hasObject && (URL_RE.test(firstTok) || /^https?:\/\/\S+$/i.test(firstTok));
+  // In URL mode, accept any single non-config token and let the server (which
+  // SSRF-validates) have the final say — don't block real hosts on a regex.
+  if (!hasObject && (looksUrl || (mode === "url" && raw.split(/\s+/).length === 1))) {
+    els.parseStatus.textContent = "✓ will scan " + firstTok.replace(/^https?:\/\//, "");
+    els.parseStatus.className = "parse-status ok";
+    return { kind: "url", url: firstTok };
   }
-  const bits = ["projectId"];
-  if (config.apiKey) bits.push("apiKey");
-  if (config.databaseURL) bits.push("databaseURL");
-  if (config.storageBucket) bits.push("storageBucket");
-  els.parseStatus.textContent = "✓ parsed — " + config.projectId + " (" + bits.join(", ") + ")";
-  els.parseStatus.className = "parse-status ok";
-  return config;
+
+  const { config } = parseFirebaseConfig(raw);
+  if (config && config.projectId) {
+    const bits = ["projectId"];
+    if (config.apiKey) bits.push("apiKey");
+    if (config.databaseURL) bits.push("databaseURL");
+    if (config.storageBucket) bits.push("storageBucket");
+    els.parseStatus.textContent = "✓ parsed — " + config.projectId + " (" + bits.join(", ") + ")";
+    els.parseStatus.className = "parse-status ok";
+    return { kind: "config", config };
+  }
+
+  // Supabase URL + key pasted?
+  if (/supabase\.(co|in)/.test(raw) && /eyJ[\w-]+\.eyJ[\w-]+/.test(raw)) {
+    els.parseStatus.textContent = "✓ Supabase project detected";
+    els.parseStatus.className = "parse-status ok";
+    return { kind: "raw", raw };
+  }
+
+  els.parseStatus.textContent = mode === "url"
+    ? "✗ That doesn't look like a URL. Switch to “Paste config” to paste a firebaseConfig."
+    : "✗ Couldn't find a projectId or Supabase key.";
+  els.parseStatus.className = "parse-status err";
+  return null;
 }
 
+function setMode(m) {
+  mode = m;
+  els.modeTabs.querySelectorAll(".mode-tab").forEach((b) => b.classList.toggle("active", b.dataset.mode === m));
+  if (m === "url") {
+    els.inputLabel.firstChild.textContent = "Website URL ";
+    els.inputHint.textContent = "the live address of your app";
+    els.config.placeholder = "https://my-app.netlify.app";
+  } else {
+    els.inputLabel.firstChild.textContent = "Firebase / Supabase config ";
+    els.inputHint.textContent = "paste it straight from your app";
+    els.config.placeholder = 'const firebaseConfig = {\n  apiKey: "AIza...",\n  projectId: "my-app",\n  storageBucket: "my-app.appspot.com"\n};\n\n— or —\ncreateClient("https://xxxx.supabase.co", "eyJ...anon key...")';
+  }
+  refreshParseStatus();
+}
+
+els.modeTabs.querySelectorAll(".mode-tab").forEach((b) =>
+  b.addEventListener("click", () => setMode(b.dataset.mode)));
 els.config.addEventListener("input", refreshParseStatus);
 
 /* ---------- API ---------- */
@@ -106,12 +152,21 @@ async function api(path, opts = {}) {
 
 els.scanBtn.addEventListener("click", runScan);
 
-async function runScan() {
-  const config = refreshParseStatus();
-  if (!config) { toast("Fix the config first.", true); return; }
-
+function buildBody() {
+  const target = refreshParseStatus();
+  if (!target) return null;
   const collections = els.collections.value.split(",").map((c) => c.trim()).filter(Boolean);
   const label = els.label.value.trim() || null;
+  const base = { collections, label };
+  if (target.kind === "config") base.config = target.config;
+  else if (target.kind === "url") base.target = target.url;
+  else base.target = target.raw;
+  return base;
+}
+
+async function runScan() {
+  const body = buildBody();
+  if (!body) { toast("Enter a URL or paste a config first.", true); return; }
   const license_key = getKey();
 
   setLoading(true);
@@ -120,14 +175,14 @@ async function runScan() {
     try {
       scan = await api("/api/scan", {
         method: "POST",
-        body: JSON.stringify({ config, collections, label, license_key }),
+        body: JSON.stringify({ ...body, license_key }),
       });
     } catch (e) {
       // Saved key is dead/empty → fall back to a free scan instead of failing.
       if (license_key && (e.status === 402 || e.status === 403)) {
         toast(e.status === 402 ? "Your key has no scans left — running a free scan." : "Saved key is invalid — running a free scan.", true);
         setKey(null);
-        scan = await api("/api/scan", { method: "POST", body: JSON.stringify({ config, collections, label }) });
+        scan = await api("/api/scan", { method: "POST", body: JSON.stringify(body) });
       } else throw e;
     }
     addHistoryId(scan.id);
@@ -198,6 +253,7 @@ function reportHeader(s) {
         <div class="project">${esc(s.project_id)}</div>
         <h2>${esc(s.target_label || "Security report")}</h2>
         <div class="verdict">${verdictText(s)}</div>
+        ${(s.stack && s.stack.length) ? `<div class="stack-row">${s.stack.map((t) => `<span class="stack-badge">${esc(t)}</span>`).join("")}</div>` : ""}
         <div class="report-meta">
           <span>${s.duration_ms} ms</span>
           <span>${created}</span>

@@ -31,7 +31,7 @@
 
   /* ---------------- Typer ---------------- */
   const typer = $("#typer");
-  const words = ["Firestore", "Realtime DB", "Storage", "Auth", "your API key"];
+  const words = ["Firestore", "Supabase RLS", "Storage", "leaked keys", "your .env"];
   if (typer && !reduce) {
     let wi = 0, ci = words[0].length, deleting = true;
     const tick = () => {

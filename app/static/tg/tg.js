@@ -19,6 +19,8 @@
   let me = null;           // /api/tg/me (inside Telegram)
   let current = null;      // scan on the result screen
   let tab = "scan";
+  let mode = "url";
+  const URL_RE = /^(https?:\/\/)?([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,24}(:\d{2,5})?([/?#]\S*)?$/i;
 
   /* ---------------- Telegram setup ---------------- */
   if (tg) {
@@ -141,17 +143,41 @@
         .replace(/'/g, '"').replace(/,(\s*[}\]])/g, "$1")) };
     } catch (_) { return { error: "Couldn't parse the config" }; }
   }
+  // → { kind:"url", url } | { kind:"config", config } | { kind:"raw", raw } | null
   function checkConfig() {
     const el = $("#parse");
-    const { config, error } = parseConfig($("#cfg").value);
-    if (!config && !error) { el.textContent = ""; el.className = "parse"; return null; }
-    if (error || !config.projectId) {
-      el.textContent = "✗ " + (error || "Missing projectId"); el.className = "parse err"; return null;
+    const raw = $("#cfg").value.trim();
+    if (!raw) { el.textContent = ""; el.className = "parse"; return null; }
+    const tok = raw.split(/\s+/)[0];
+    const hasObject = raw.includes("{");
+    const looksUrl = !hasObject && (URL_RE.test(tok) || /^https?:\/\/\S+$/i.test(tok));
+    if (!hasObject && (looksUrl || (mode === "url" && raw.split(/\s+/).length === 1))) {
+      el.textContent = "✓ " + tok.replace(/^https?:\/\//, ""); el.className = "parse ok";
+      return { kind: "url", url: tok };
     }
-    el.textContent = "✓ " + config.projectId + (config.apiKey ? " · apiKey" : "") + (config.storageBucket ? " · storage" : "");
-    el.className = "parse ok";
-    return config;
+    const { config } = parseConfig(raw);
+    if (config && config.projectId) {
+      el.textContent = "✓ " + config.projectId + (config.apiKey ? " · apiKey" : "") + (config.storageBucket ? " · storage" : "");
+      el.className = "parse ok";
+      return { kind: "config", config };
+    }
+    if (/supabase\.(co|in)/.test(raw) && /eyJ[\w-]+\.eyJ[\w-]+/.test(raw)) {
+      el.textContent = "✓ Supabase project"; el.className = "parse ok";
+      return { kind: "raw", raw };
+    }
+    el.textContent = mode === "url" ? "✗ Not a valid URL" : "✗ No projectId / Supabase key";
+    el.className = "parse err";
+    return null;
   }
+  function setMode(m) {
+    mode = m;
+    $$("#modeTabs .mode-tab").forEach((b) => b.classList.toggle("active", b.dataset.mode === m));
+    const lbl = $("#cfgLbl"), hint = $("#cfgHint"), cfg = $("#cfg");
+    if (m === "url") { lbl.firstChild.textContent = "Website URL "; hint.textContent = "your app's live address"; cfg.placeholder = "https://my-app.netlify.app"; }
+    else { lbl.firstChild.textContent = "Firebase / Supabase config "; hint.textContent = "paste from your app"; cfg.placeholder = 'firebaseConfig = { apiKey:"AIza…", projectId:"my-app" }\n— or —\ncreateClient("https://xxx.supabase.co","eyJ…")'; }
+    checkConfig();
+  }
+  $$("#modeTabs .mode-tab").forEach((b) => b.addEventListener("click", () => { haptic.soft(); setMode(b.dataset.mode); }));
   $("#cfg").addEventListener("input", checkConfig);
   $("#howBtn").addEventListener("click", () => { haptic.soft(); $("#how").hidden = !$("#how").hidden; });
   $("#pasteBtn").addEventListener("click", async () => {
@@ -168,18 +194,21 @@
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
   async function runScan() {
-    const config = checkConfig();
-    if (!config) { haptic.err(); toast("Paste a valid firebaseConfig first", true); $("#cfg").focus(); return; }
+    const target = checkConfig();
+    if (!target) { haptic.err(); toast("Enter a URL or paste a config first", true); $("#cfg").focus(); return; }
 
     show("scanning");
     primary.hide();
     setBack(null);
-    $("#scanProject").textContent = config.projectId;
+    $("#scanProject").textContent = target.kind === "config" ? target.config.projectId
+      : (target.url || "your app").replace(/^https?:\/\//, "");
     const steps = $$("#steps li");
     steps.forEach((s) => s.className = "");
 
     let done = false, result = null, error = null;
-    const body = { config, label: $("#label").value.trim() || null };
+    const body = { label: $("#label").value.trim() || null };
+    if (target.kind === "config") body.config = target.config;
+    else body.target = target.url || target.raw;
     const key = getKey();
     if (key) body.license_key = key;
 
@@ -240,6 +269,7 @@
           <div class="r-proj">${esc(s.project_id)}</div>
           <div class="r-title">${esc(s.target_label || "Security report")}</div>
           <div class="r-verdict">${verdict(s)}</div>
+          ${(s.stack && s.stack.length) ? `<div class="stack-row">${s.stack.map((t) => `<span class="stack-badge">${esc(t)}</span>`).join("")}</div>` : ""}
         </div>
       </div>
       <div class="sev-row">
@@ -513,12 +543,21 @@
     if (inTG && ver("6.9") && !getKey()) {
       try { tg.CloudStorage.getItem("vg_license", (e, v) => { if (!e && v) store.set("vg_license", v); }); } catch (_) {}
     }
-    refreshMe();
+    await refreshMe();
     goTab("scan");
-    // Deep link: t.me/bot/app?startapp=history
-    const sp = inTG && tg.initDataUnsafe && tg.initDataUnsafe.start_param;
+    // Deep link: t.me/bot/app?startapp=history|key|scan_<id>, or a web_app button URL (#scan_<id>).
+    let sp = inTG && tg.initDataUnsafe && tg.initDataUnsafe.start_param;
+    if (!sp) {
+      const h = (location.hash || "").replace(/^#/, "");
+      let q = ""; try { q = new URLSearchParams(location.search).get("startapp") || ""; } catch (_) {}
+      sp = h || q;
+    }
     if (sp === "history") goTab("history");
-    if (sp === "key") goTab("key");
+    else if (sp === "key") goTab("key");
+    else if (sp && sp.indexOf("scan_") === 0) {
+      const id = sp.slice(5);
+      try { showResult(await api("/api/scans/" + id)); } catch (_) {}
+    }
     // Came back after paying (CryptoBot) or the admin approved a transfer meanwhile.
     VGPay.resume(payCtx(null));
   })();

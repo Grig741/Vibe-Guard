@@ -23,29 +23,29 @@
         <svg class="logo" viewBox="0 0 24 24"><path class="lf" d="M12 2 4 5v6c0 5 3.4 9.4 8 11 4.6-1.6 8-6 8-11V5l-8-3Z"/><path class="lc" d="m8.5 12 2.4 2.4L16 9.3"/></svg>
       </div>
       <h1>Vibe<span>Guard</span></h1>
-      <p>Find the holes in your Firebase app<br/>before someone else does.</p>
+      <p>Find the holes in your app<br/>before someone else does.</p>
     </header>
 
     <div class="card in">
-      <label class="lbl" for="cfg">Firebase config <span>paste from your app</span></label>
-      <textarea id="cfg" spellcheck="false" autocomplete="off" placeholder='const firebaseConfig = {
-  apiKey: "AIza…",
-  projectId: "my-app",
-  storageBucket: "my-app.appspot.com"
-};'></textarea>
+      <div class="mode-tabs" id="modeTabs">
+        <button class="mode-tab active" data-mode="url" type="button">🔗 URL</button>
+        <button class="mode-tab" data-mode="config" type="button">⚙ Config</button>
+      </div>
+      <label class="lbl" for="cfg" id="cfgLbl">Website URL <span id="cfgHint">your app's live address</span></label>
+      <textarea id="cfg" spellcheck="false" autocomplete="off" placeholder="https://my-app.netlify.app"></textarea>
       <div class="parse" id="parse"></div>
       <div class="row">
         <button class="chip-btn" id="pasteBtn" type="button">⎘ Paste</button>
-        <button class="chip-btn" id="howBtn" type="button">? Where is it</button>
+        <button class="chip-btn" id="howBtn" type="button">? What to paste</button>
       </div>
       <div class="how" id="how" hidden>
-        Firebase console → ⚙ Project settings → General → <b>Your apps</b> → SDK setup → <b>Config</b>. Or search your code for <code>firebaseConfig</code>.
+        <b>URL:</b> just your app's web address. <b>Config:</b> Firebase console → ⚙ Project settings → Your apps → Config, or your Supabase <code>createClient(url, anonKey)</code> line.
       </div>
       <input id="label" class="inp" type="text" placeholder="Label (optional) — e.g. My app · prod" maxlength="80" />
     </div>
 
     <div class="checks-mini in">
-      <span>Firestore</span><span>Realtime DB</span><span>Storage</span><span>Auth</span><span>API key</span>
+      <span>Firebase</span><span>Supabase</span><span>Leaked keys</span><span>Storage</span><span>.env / headers</span>
     </div>
 
     <p class="fine">Scan only projects you own. Your API key is never stored.</p>

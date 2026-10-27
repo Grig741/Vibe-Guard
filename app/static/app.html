@@ -38,20 +38,19 @@
     <!-- LEFT: input -->
     <section class="panel input-panel">
       <div class="panel-head">
-        <h1>Scan your Firebase app</h1>
-        <p class="sub">Paste the <code>firebaseConfig</code> from your own app. VibeGuard probes it the way an attacker would — read-only and self-cleaning — and grades what it finds.</p>
+        <h1>Scan your app for security holes</h1>
+        <p class="sub">Paste your site URL, your <code>firebaseConfig</code>, or your Supabase URL + anon key. VibeGuard probes it the way an attacker would — read-only and self-cleaning — and grades what it finds.</p>
       </div>
 
-      <label class="field-label" for="configInput">Firebase config
-        <span class="hint">JS object or JSON — pasted straight from your app</span>
+      <div class="mode-tabs" id="modeTabs" role="tablist">
+        <button class="mode-tab active" data-mode="url" type="button">🔗 Website URL</button>
+        <button class="mode-tab" data-mode="config" type="button">⚙ Paste config</button>
+      </div>
+
+      <label class="field-label" for="configInput" id="inputLabel">Website URL
+        <span class="hint" id="inputHint">the live address of your app</span>
       </label>
-      <textarea id="configInput" spellcheck="false" placeholder="const firebaseConfig = {
-  apiKey: &quot;AIza...&quot;,
-  authDomain: &quot;my-app.firebaseapp.com&quot;,
-  projectId: &quot;my-app&quot;,
-  storageBucket: &quot;my-app.appspot.com&quot;,
-  databaseURL: &quot;https://my-app-default-rtdb.firebaseio.com&quot;
-};"></textarea>
+      <textarea id="configInput" spellcheck="false" placeholder="https://my-app.netlify.app"></textarea>
       <div id="parseStatus" class="parse-status"></div>
 
       <div class="field-row">
@@ -92,11 +91,11 @@
         <h2>No report yet</h2>
         <p>Free scan shows your grade and how many holes you have. Unlock the full report to see each one and exactly how to fix it.</p>
         <ul class="feature-list">
-          <li>Firestore open read / write</li>
-          <li>Realtime Database open rules</li>
-          <li>Storage bucket exposure</li>
-          <li>Open sign-up &amp; anonymous auth</li>
-          <li>Unrestricted web API key</li>
+          <li>Firebase &amp; Supabase open database rules</li>
+          <li>Storage buckets exposed to the public</li>
+          <li>Leaked API keys in your frontend (OpenAI, Stripe, AWS…)</li>
+          <li>Open sign-up, anonymous auth &amp; weak RLS</li>
+          <li>Public <code>.env</code> / <code>.git</code>, source maps, missing headers</li>
         </ul>
       </div>
       <div id="reportContent" class="report-content" hidden></div>

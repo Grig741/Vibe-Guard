@@ -39,7 +39,8 @@ from .config import (
     TG_WEBHOOK_SECRET,
 )
 from .database import SessionLocal, get_db, init_db
-from .scanner import run_scan
+from .scanner import scan_firebase, scan_supabase, scan_url
+from .scanner.detect import classify_input
 from .schemas import (
     LicenseCreate,
     LicenseOut,
@@ -76,6 +77,7 @@ def _serialize(scan: models.Scan) -> dict:
         "error": scan.error,
         "issues": issues,
         "locked": not scan.unlocked,
+        "stack": [s for s in (scan.stack or "").split(",") if s],
         "findings": [],
     })
     if scan.unlocked:
@@ -88,6 +90,42 @@ def _serialize(scan: models.Scan) -> dict:
             for f in scan.findings
         ]
     return data
+
+
+async def _dispatch_scan(req: ScanRequest) -> dict:
+    """Route a scan request to the right scanner based on what was sent."""
+    # Explicit firebaseConfig (API, or the classic Firebase path).
+    if req.config is not None and req.config.projectId:
+        return await scan_firebase(req.config, req.collections)
+
+    raw = (req.target or "").strip()
+    if not raw:
+        raise HTTPException(status_code=422,
+                            detail="Send a website URL, a firebaseConfig, or Supabase URL + anon key.")
+
+    if raw.lower() in ("vibeguard-demo", "demo"):
+        from .schemas import FirebaseConfig
+        return await scan_firebase(FirebaseConfig(projectId="vibeguard-demo"), [])
+
+    kind = classify_input(raw)
+    t = kind["type"]
+    if t == "url":
+        return await scan_url(kind["url"])
+    if t == "supabase":
+        sb = kind["supabase"]
+        if not (sb.anon_key or sb.service_key):
+            # Only a bare supabase URL → nothing to probe without the key.
+            raise HTTPException(status_code=422,
+                                detail="Found a Supabase URL but no anon key. Paste the "
+                                       "createClient(url, anonKey) line, or just give me your site URL.")
+        return await scan_supabase(sb)
+    if t == "firebase":
+        fb = kind["firebase"]
+        from .schemas import FirebaseConfig
+        return await scan_firebase(FirebaseConfig(**fb.as_config()), req.collections)
+    raise HTTPException(status_code=422,
+                        detail="Couldn't tell what that is. Paste your site URL, your "
+                               "firebaseConfig object, or your Supabase URL + anon key.")
 
 
 def _normalize_key(key: str | None) -> str:
@@ -168,9 +206,6 @@ def pricing() -> dict:
 @app.post("/api/scan", response_model=ScanDetail)
 async def create_scan(req: ScanRequest, db: Session = Depends(get_db),
                       user: dict | None = Depends(tg_user)) -> dict:
-    if not req.config.projectId:
-        raise HTTPException(status_code=422, detail="config.projectId is required")
-
     # Pick a license BEFORE spending time on the scan: an explicit key wins,
     # otherwise a Telegram user's own paid license is used automatically.
     lic = None
@@ -179,11 +214,15 @@ async def create_scan(req: ScanRequest, db: Session = Depends(get_db),
     elif user is not None:
         lic = tg.user_license(db, user["id"])
 
-    result = await run_scan(req.config, req.collections)
+    # Decide what to scan: an explicit firebaseConfig, or the smart `target`
+    # string (a URL, or Supabase URL + anon key, or a pasted config).
+    result = await _dispatch_scan(req)
 
     scan = models.Scan(
         project_id=result["project_id"],
         target_label=req.label,
+        scan_type=result.get("scan_type", "firebase"),
+        stack=",".join(result.get("stack", [])) or None,
         status=result["status"],
         score=result["score"],
         grade=result["grade"],

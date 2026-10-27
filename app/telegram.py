@@ -253,11 +253,16 @@ async def handle_update(update: dict, db: Session) -> None:
     if not cmd and user_id != ADMIN_TG_ID and await payments.forward_buyer_proof(db, msg):
         return
 
+    # 3b) A plain URL / config pasted in chat → scan it right here.
+    if not cmd and text and await _maybe_scan_in_chat(db, chat_id, user_id, text):
+        return
+
     if cmd in ("/start", "/help") or not cmd:
         await _send(chat_id, (
-            "<b>🛡 VibeGuard</b> — security scanner for Firebase &amp; vibe-coded apps.\n\n"
-            "Paste your <code>firebaseConfig</code> and in seconds you'll know if anyone "
-            "can read or wipe your database, list your storage, or sign up without limits.\n\n"
+            "<b>🛡 VibeGuard</b> — security scanner for Firebase, Supabase &amp; vibe-coded apps.\n\n"
+            "Send me your app's <b>URL</b> (or paste a <code>firebaseConfig</code> / Supabase key) "
+            "and in seconds you'll know if anyone can read or wipe your database, list your storage, "
+            "sign up without limits, or grab an API key you left in the frontend.\n\n"
             "• <b>Free:</b> grade + how many holes you have\n"
             f"• <b>Full report:</b> every hole, proof and copy-paste fixes ({PACK_SCANS} scans) — "
             f"pay with ⭐ Stars, crypto or bank transfer\n\n"
@@ -305,6 +310,103 @@ async def handle_update(update: dict, db: Session) -> None:
         ), with_button=False)
     else:
         await _send(chat_id, "Use the button below to scan your app, or /help.")
+
+
+async def _maybe_scan_in_chat(db: Session, chat_id: int, user_id: int, text: str) -> bool:
+    """If the message looks like a URL / Firebase / Supabase target, scan it and
+    reply with the free summary + a button into the Mini App for the full report.
+    Returns True if it handled the message."""
+    from .scanner import scan_firebase, scan_supabase, scan_url
+    from .scanner.detect import classify_input
+    from .schemas import FirebaseConfig
+
+    kind = classify_input(text)
+    t = kind["type"]
+    if t == "unknown":
+        return False
+
+    await safe_call("sendChatAction", chat_id=chat_id, action="typing")
+    try:
+        if t == "url":
+            result = await scan_url(kind["url"])
+        elif t == "supabase":
+            sb = kind["supabase"]
+            if not (sb.anon_key or sb.service_key):
+                return False
+            result = await scan_supabase(sb)
+        else:  # firebase
+            result = await scan_firebase(FirebaseConfig(**kind["firebase"].as_config()), [])
+    except Exception as exc:  # noqa: BLE001
+        log.warning("in-chat scan failed: %s", exc)
+        return False
+
+    # A Telegram user with an active key gets the scan unlocked automatically.
+    lic = user_license(db, user_id)
+    scan = models.Scan(
+        project_id=result["project_id"], scan_type=result.get("scan_type", "firebase"),
+        stack=",".join(result.get("stack", [])) or None, status=result["status"],
+        score=result["score"], grade=result["grade"], critical=result["critical"],
+        high=result["high"], medium=result["medium"], low=result["low"],
+        passed=result["passed"], duration_ms=result["duration_ms"], error=result["error"],
+        tg_user_id=user_id,
+    )
+    for f in result["findings"]:
+        scan.findings.append(models.Finding(
+            check_id=f["check_id"], title=f["title"], severity=f["severity"], status=f["status"],
+            description=f["description"], remediation=f["remediation"], evidence=f["evidence"],
+            weight=f["weight"]))
+    issues = result["critical"] + result["high"] + result["medium"] + result["low"]
+    if lic is not None and issues > 0:
+        lic.used += 1
+        scan.unlocked = True
+        scan.license_key = lic.key
+    db.add(scan)
+    db.commit()
+    db.refresh(scan)
+
+    await _send_scan_summary(chat_id, scan, issues)
+    return True
+
+
+async def _send_scan_summary(chat_id: int, scan: models.Scan, issues: int) -> None:
+    stack = (scan.stack or "").replace(",", " · ")
+    head = f"<b>🛡 {esc(scan.project_id)}</b>"
+    if stack:
+        head += f"\n<i>{esc(stack)}</i>"
+    if scan.status == "error" and issues == 0:
+        await _send(chat_id, head + f"\n\n⚠️ {esc(scan.error or 'Could not complete the scan.')}")
+        return
+    bars = []
+    if scan.critical: bars.append(f"🔴 {scan.critical} critical")
+    if scan.high: bars.append(f"🟠 {scan.high} high")
+    if scan.medium: bars.append(f"🟡 {scan.medium} medium")
+    if scan.low: bars.append(f"⚪ {scan.low} low")
+    body = "\n".join(bars) if bars else "✅ No exposures found in the checks that ran."
+    grade_line = f"Grade <b>{scan.grade}</b> · {scan.score}/100"
+
+    if scan.unlocked:
+        text = f"{head}\n\n{grade_line}\n{body}\n\nTap below for the full report with fixes."
+    elif issues > 0:
+        text = (f"{head}\n\n{grade_line}\n{body}\n\n"
+                f"🔒 The <b>free</b> scan shows the count. Open the full report to see "
+                f"exactly which {issues} hole{'s' if issues != 1 else ''} and copy-paste fixes.")
+    else:
+        text = f"{head}\n\n{grade_line}\n{body}"
+
+    markup = _scan_button_markup(scan.id)
+    await safe_call("sendMessage", chat_id=chat_id, text=text, parse_mode="HTML",
+                    reply_markup=markup, disable_web_page_preview=True)
+
+
+def _scan_button_markup(scan_id: str) -> dict | None:
+    url = webapp_url()
+    if not url:
+        return None
+    # Deep-link the Mini App straight to this scan.
+    return {"inline_keyboard": [[{
+        "text": "🔓 Open full report",
+        "web_app": {"url": f"{url}?startapp=scan_{scan_id}#scan_{scan_id}"},
+    }]]}
 
 
 async def _on_payment(db: Session, chat_id: int, user_id: int, sp: dict) -> None:
