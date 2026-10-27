@@ -10,6 +10,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/style.css" />
   <link rel="stylesheet" href="/pay.css" />
+  <link rel="stylesheet" href="/motion.css" />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%235eead4' d='M12 2 4 5v6c0 5 3.4 9.4 8 11 4.6-1.6 8-6 8-11V5l-8-3Z'/%3E%3C/svg%3E" />
 </head>
 <body>
@@ -43,8 +44,8 @@
       </div>
 
       <div class="mode-tabs" id="modeTabs" role="tablist">
-        <button class="mode-tab active" data-mode="url" type="button">🔗 Website URL</button>
-        <button class="mode-tab" data-mode="config" type="button">⚙ Paste config</button>
+        <button class="mode-tab active rp" data-mode="url" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 14a4.5 4.5 0 0 0 6.4 0l3-3a4.5 4.5 0 0 0-6.4-6.4l-1 1"/><path d="M14 10a4.5 4.5 0 0 0-6.4 0l-3 3a4.5 4.5 0 0 0 6.4 6.4l1-1"/></svg><span>Website URL</span></button>
+        <button class="mode-tab rp" data-mode="config" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8 7-5 5 5 5M16 7l5 5-5 5M13.5 4l-3 16"/></svg><span>Paste config</span></button>
       </div>
 
       <label class="field-label" for="configInput" id="inputLabel">Website URL
@@ -69,7 +70,7 @@
         <span><b>This is my project</b> — also run active tests (a test write that's deleted right after, a throwaway sign-up). Without it, only read-only checks run.</span>
       </label>
 
-      <button id="scanBtn" class="scan-btn">
+      <button id="scanBtn" class="scan-btn rp">
         <span class="btn-label">Run security scan</span>
         <span class="btn-spinner" aria-hidden="true"></span>
       </button>
@@ -111,6 +112,7 @@
     <span>VibeGuard</span><span class="dot">·</span><span>Security self-scan for Firebase, Supabase &amp; vibe-coded apps</span>
   </footer>
 
+  <script src="/motion.js"></script>
   <script src="/pay.js"></script>
   <script src="/app.js"></script>
 </body>

@@ -220,7 +220,9 @@ def _build_findings(raw: list[dict]) -> list[dict]:
             severity = "info"
         out.append({
             "check_id": cid,
-            "title": PASS_TITLES.get(cid, meta.title) if status == "ok" else meta.title,
+            "title": (PASS_TITLES.get(cid, meta.title) if status == "ok"
+                      else meta.title if status == "vulnerable"
+                      else f"Not checked — {meta.title}"),
             "severity": severity,
             "status": status,
             "description": meta.description,

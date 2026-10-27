@@ -75,6 +75,13 @@ function parseFirebaseConfig(raw) {
 
 // Returns what will be scanned: { kind:"url", url } | { kind:"config", config } | null
 function refreshParseStatus() {
+  const before = els.parseStatus.className;
+  const r = parseTarget();
+  if (els.parseStatus.className !== before && els.parseStatus.textContent) VGMotion.flash(els.parseStatus);
+  return r;
+}
+
+function parseTarget() {
   const raw = els.config.value.trim();
   if (!raw) { els.parseStatus.textContent = ""; els.parseStatus.className = "parse-status"; return null; }
 
@@ -118,6 +125,7 @@ function refreshParseStatus() {
 function setMode(m) {
   mode = m;
   els.modeTabs.querySelectorAll(".mode-tab").forEach((b) => b.classList.toggle("active", b.dataset.mode === m));
+  tabInd.update();
   if (m === "url") {
     els.inputLabel.firstChild.textContent = "Website URL ";
     els.inputHint.textContent = "the live address of your app";
@@ -130,6 +138,7 @@ function setMode(m) {
   refreshParseStatus();
 }
 
+const tabInd = VGMotion.tabIndicator(els.modeTabs, ".mode-tab");
 els.modeTabs.querySelectorAll(".mode-tab").forEach((b) =>
   b.addEventListener("click", () => setMode(b.dataset.mode)));
 els.config.addEventListener("input", refreshParseStatus);
@@ -171,6 +180,7 @@ async function runScan() {
   const license_key = getKey();
 
   setLoading(true);
+  const live = startLive(body);
   try {
     let scan;
     try {
@@ -187,14 +197,37 @@ async function runScan() {
       } else throw e;
     }
     addHistoryId(scan.id);
+    await live.finish();
+    live.destroy();
     renderReport(scan);
     loadHistory();
     renderProStatus();
   } catch (e) {
+    live.fail();
     toast("Scan failed: " + e.message, true);
+    setTimeout(() => { live.destroy(); restoreReportView(); }, 1100);
   } finally {
     setLoading(false);
   }
+}
+
+function startLive(body) {
+  let kind = "url", label = body.target || "";
+  if (body.config) { kind = "firebase"; label = body.config.projectId; }
+  else if (/supabase\.(co|in)/.test(body.target || "") && !/^https?:\/\/[^\s]+$/.test((body.target || "").trim())) {
+    kind = "supabase"; const m = (body.target || "").match(/https:\/\/([a-z0-9]+)\.supabase/); label = m ? m[1] : "Supabase project";
+  }
+  label = String(label).replace(/^https?:\/\//, "").replace(/\/$/, "");
+  els.reportEmpty.hidden = true;
+  els.reportContent.hidden = true;
+  const live = VGMotion.scanLog($("#reportPanel"), kind, label);
+  if (window.innerWidth < 900) $("#reportPanel").scrollIntoView({ behavior: "smooth", block: "start" });
+  return live;
+}
+
+function restoreReportView() {
+  if (currentScan) { els.reportContent.hidden = false; return; }
+  els.reportEmpty.hidden = false;
 }
 
 function setLoading(on) {
@@ -239,23 +272,24 @@ function reportHeader(s) {
   const created = new Date(s.created_at).toLocaleString();
   return `
     <div class="report-top">
-      <div class="gauge">
+      <div class="gauge" style="--orbit:${color}">
+        <div class="gauge-orbit"></div>
         <svg width="150" height="150" viewBox="0 0 150 150">
           <circle class="gauge-track" cx="75" cy="75" r="${R}"></circle>
           <circle class="gauge-fill" cx="75" cy="75" r="${R}" data-offset="${C * (1 - s.score / 100)}"
             stroke="${color}" stroke-dasharray="${C}" stroke-dashoffset="${C}"></circle>
         </svg>
         <div class="gauge-center">
-          <div class="gauge-grade" style="color:${color}">${s.grade}</div>
-          <div class="gauge-score">${s.score}/100</div>
+          <div class="gauge-grade grade-pop" style="color:${color}" data-grade="${s.grade}">${s.grade}</div>
+          <div class="gauge-score"><span data-count="${s.score}">${s.score}</span>/100</div>
         </div>
       </div>
       <div class="report-head">
-        <div class="project">${esc(s.project_id)}</div>
-        <h2>${esc(s.target_label || "Security report")}</h2>
-        <div class="verdict">${verdictText(s)}</div>
-        ${(s.stack && s.stack.length) ? `<div class="stack-row">${s.stack.map((t) => `<span class="stack-badge">${esc(t)}</span>`).join("")}</div>` : ""}
-        <div class="report-meta">
+        <div class="project mv">${esc(s.project_id)}</div>
+        <h2 class="mv">${esc(s.target_label || "Security report")}</h2>
+        <div class="verdict mv">${verdictText(s)}</div>
+        ${(s.stack && s.stack.length) ? `<div class="stack-row">${s.stack.map((t, i) => `<span class="stack-badge mv-pop" style="--d:${450 + i * 90}ms">${esc(t)}</span>`).join("")}</div>` : ""}
+        <div class="report-meta mv">
           <span>${s.duration_ms} ms</span>
           <span>${created}</span>
           <span>${s.locked ? "free report" : "full report"}</span>
@@ -269,8 +303,10 @@ function reportHeader(s) {
       ${sevPill("low", s.low, "Low")}
       ${sevPill("pass", s.passed, "Passed")}
     </div>
-    ${s.active_skipped ? `<div class="active-note">ℹ️ ${s.active_skipped} active test${s.active_skipped === 1 ? "" : "s"} (write / sign-up) didn't run. Tick <b>“This is my project”</b> and re-scan for the full check.</div>` : ""}`;
+    ${s.active_skipped ? `<div class="active-note mv">${ICON_INFO}<span>${s.active_skipped} active test${s.active_skipped === 1 ? "" : "s"} (write / sign-up) didn't run. Tick <b>“This is my project”</b> and re-scan for the full check.</span></div>` : ""}`;
 }
+
+const ICON_INFO = `<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 7.5v.01"/></svg>`;
 
 function renderReport(s) {
   currentScan = s;
@@ -278,10 +314,11 @@ function renderReport(s) {
   els.reportContent.hidden = false;
   els.reportContent.innerHTML = reportHeader(s) + (s.locked ? lockedBody(s) : fullBody(s));
 
-  requestAnimationFrame(() => {
+  requestAnimationFrame(() => requestAnimationFrame(() => {
     const fill = els.reportContent.querySelector(".gauge-fill");
     if (fill) fill.style.strokeDashoffset = fill.dataset.offset;
-  });
+  }));
+  VGMotion.revealReport(els.reportContent);
 
   if (s.locked) bindLocked(s); else bindFull(s);
   els.reportContent.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -296,7 +333,7 @@ function lockedBody(s) {
   if (n === 0) {
     return `
       <div class="lock-hero">
-        <div class="lock-count good">0</div>
+        <div class="lock-count good" data-count="0">0</div>
         <div class="lock-label">No security holes found</div>
         <div class="lock-sub">Every check that ran came back clean.</div>
       </div>`;
@@ -309,19 +346,19 @@ function lockedBody(s) {
     <div class="finding sev-${sev}">
       <div class="finding-head">
         <span class="badge ${sev}">${SEV_LABEL[sev]}</span>
-        <span class="finding-title"><span class="fake-line" style="width:${[62, 48, 70, 55][i]}%"></span></span>
+        <span class="finding-title"><span class="fake-line fake-shimmer" style="width:${[62, 48, 70, 55][i]}%"></span></span>
       </div>
     </div>`).join("");
 
   const m = pricing.methods || {};
   const buy = (m.manual || m.crypto || m.link)
-    ? `<button class="buy-btn" id="buyBtn" type="button" style="border:0;cursor:pointer;font-family:inherit">Get full report — $${esc(pricing.price_usd || "9")}</button>
+    ? `<button class="buy-btn shine rp" id="buyBtn" type="button" style="border:0;cursor:pointer;font-family:inherit">Get full report — $${esc(pricing.price_usd || "9")}</button>
        <div class="or-line">card, bank transfer or crypto · already have a key?</div>`
     : "";
 
   return `
     <div class="lock-hero">
-      <div class="lock-count ${cls}">${n}</div>
+      <div class="lock-count ${cls}${s.critical ? " shake-on-reveal" : ""}" data-count="${n}">${n}</div>
       <div class="lock-label">${word} found in your project</div>
       <div class="lock-sub">Details and fixes are in the full report.</div>
     </div>
@@ -338,7 +375,7 @@ function lockedBody(s) {
       ${buy}
       <div class="key-row">
         <input id="keyInput" type="text" placeholder="VG-XXXX-XXXX-XXXX" autocomplete="off" />
-        <button class="ghost-btn" id="unlockBtn">Unlock</button>
+        <button class="ghost-btn rp" id="unlockBtn">Unlock</button>
       </div>
     </div>`;
 }
@@ -385,16 +422,16 @@ function fullBody(s) {
   const other = s.findings.filter((f) => f.status !== "vulnerable" && f.status !== "ok");
   return `
     <div class="findings">
-      ${vulns.length ? `<div class="section-label">Issues to fix</div>` : ""}
+      ${vulns.length ? `<div class="section-label mv">Issues to fix</div>` : ""}
       ${vulns.map(findingCard).join("")}
-      ${passes.length ? `<div class="section-label">Passed checks</div>` : ""}
+      ${passes.length ? `<div class="section-label mv">Passed checks</div>` : ""}
       ${passes.map(findingCard).join("")}
-      ${other.length ? `<div class="section-label">Not determined</div>` : ""}
+      ${other.length ? `<div class="section-label mv">Not determined</div>` : ""}
       ${other.map(findingCard).join("")}
     </div>
-    <div class="report-actions">
-      <button class="ghost-btn" id="copyJson">Copy JSON</button>
-      <button class="ghost-btn" id="rescanBtn">Re-scan</button>
+    <div class="report-actions mv">
+      <button class="ghost-btn rp" id="copyJson">Copy JSON</button>
+      <button class="ghost-btn rp" id="rescanBtn">Re-scan</button>
     </div>`;
 }
 
@@ -407,15 +444,19 @@ function bindFull(s) {
   const first = els.reportContent.querySelector(".finding:not(.no-detail):not(.sev-pass):not(.sev-info)");
   if (first) first.classList.add("open");
 
-  $("#copyJson").addEventListener("click", () => {
-    try { navigator.clipboard.writeText(JSON.stringify(s, null, 2)); toast("Report JSON copied."); }
-    catch (_) { toast("Couldn't copy.", true); }
+  $("#copyJson").addEventListener("click", (ev) => {
+    const b = ev.currentTarget;
+    try {
+      navigator.clipboard.writeText(JSON.stringify(s, null, 2));
+      b.classList.add("copied"); b.firstChild.textContent = "Copied";
+      setTimeout(() => { b.classList.remove("copied"); b.firstChild.textContent = "Copy JSON"; }, 1600);
+    } catch (_) { toast("Couldn't copy.", true); }
   });
   $("#rescanBtn").addEventListener("click", runScan);
 }
 
 function sevPill(cls, n, label) {
-  return `<div class="sev-pill c-${cls}"><span class="n">${n}</span><span class="l">${label}</span></div>`;
+  return `<div class="sev-pill c-${cls} mv"><span class="n" data-count="${n}">${n}</span><span class="l">${label}</span></div>`;
 }
 
 function findingCard(f) {
@@ -425,13 +466,13 @@ function findingCard(f) {
   const desc = f.status === "vulnerable" && f.description ? `<p>${esc(f.description)}</p>` : "";
   const fix = f.status === "vulnerable" && f.remediation
     ? `<div class="fix-label">How to fix</div><pre>${esc(f.remediation)}</pre>` : "";
-  const body = hasDetail ? `<div class="finding-body">${desc}${evidence}${fix}</div>` : "";
+  const body = hasDetail ? `<div class="finding-body"><div class="fb-inner">${desc}${evidence}${fix}</div></div>` : "";
   return `
-    <div class="finding sev-${f.severity}${hasDetail ? "" : " no-detail"}">
+    <div class="finding sev-${f.severity}${hasDetail ? "" : " no-detail"} mv">
       <div class="finding-head">
         <span class="badge ${f.severity}">${badge}</span>
         <span class="finding-title">${esc(f.title)}</span>
-        ${hasDetail ? `<span class="chevron">▶</span>` : ""}
+        ${hasDetail ? `<svg class="chevron ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>` : ""}
       </div>
       ${body}
     </div>`;
@@ -466,11 +507,11 @@ async function loadHistory() {
 
   if (!scans.length) { els.historyList.innerHTML = `<li class="empty">No scans yet.</li>`; return; }
 
-  els.historyList.innerHTML = scans.map((s) => {
+  els.historyList.innerHTML = scans.map((s, i) => {
     const color = GRADE_COLOR[s.grade] || "var(--info)";
     const name = s.target_label || s.project_id;
     const time = new Date(s.created_at).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
-    return `<li class="hist-item" data-id="${s.id}">
+    return `<li class="hist-item mv" style="--d:${i * 45}ms" data-id="${s.id}">
       <span class="hist-grade" style="color:${color}">${s.grade}</span>
       <span class="hist-info">
         <span class="hist-name">${esc(name)}</span>
@@ -493,7 +534,9 @@ async function loadHistory() {
       const id = btn.dataset.del;
       try { await api("/api/scans/" + id, { method: "DELETE" }); } catch (_) {}
       removeHistoryId(id);
-      loadHistory();
+      VGMotion.out(btn.closest(".hist-item"), () => {
+        if (!els.historyList.querySelector(".hist-item")) els.historyList.innerHTML = `<li class="empty mv">No scans yet.</li>`;
+      });
     });
   });
 }
@@ -512,6 +555,8 @@ async function boot() {
     els.healthBadge.className = "health down";
   }
   try { pricing = await api("/api/pricing"); } catch (_) {}
+  VGMotion.magnetic(els.scanBtn);
+  VGMotion.spotlight([document.querySelector(".input-panel"), $("#reportPanel")]);
   renderProStatus();
   loadHistory();
   // Back from CryptoBot (?order=…) or returning after a manual transfer was approved.

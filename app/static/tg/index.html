@@ -11,6 +11,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,700;12..96,800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/tg/tg.css" />
   <link rel="stylesheet" href="/pay.css" />
+  <link rel="stylesheet" href="/motion.css" />
 </head>
 <body>
   <div class="bg" aria-hidden="true"><div class="bg-orb a"></div><div class="bg-orb b"></div></div>
@@ -28,15 +29,15 @@
 
     <div class="card in">
       <div class="mode-tabs" id="modeTabs">
-        <button class="mode-tab active" data-mode="url" type="button">🔗 URL</button>
-        <button class="mode-tab" data-mode="config" type="button">⚙ Config</button>
+        <button class="mode-tab active rp" data-mode="url" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 14a4.5 4.5 0 0 0 6.4 0l3-3a4.5 4.5 0 0 0-6.4-6.4l-1 1"/><path d="M14 10a4.5 4.5 0 0 0-6.4 0l-3 3a4.5 4.5 0 0 0 6.4 6.4l1-1"/></svg><span>URL</span></button>
+        <button class="mode-tab rp" data-mode="config" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8 7-5 5 5 5M16 7l5 5-5 5M13.5 4l-3 16"/></svg><span>Config</span></button>
       </div>
       <label class="lbl" for="cfg" id="cfgLbl">Website URL <span id="cfgHint">your app's live address</span></label>
       <textarea id="cfg" spellcheck="false" autocomplete="off" placeholder="https://my-app.netlify.app"></textarea>
       <div class="parse" id="parse"></div>
       <div class="row">
-        <button class="chip-btn" id="pasteBtn" type="button">⎘ Paste</button>
-        <button class="chip-btn" id="howBtn" type="button">? What to paste</button>
+        <button class="chip-btn rp" id="pasteBtn" type="button"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="3" width="8" height="4" rx="1"/><path d="M16 5h2a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h2"/></svg> Paste</button>
+        <button class="chip-btn rp" id="howBtn" type="button"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.6 9.2a2.5 2.5 0 0 1 4.8.9c0 1.7-2.4 2.2-2.4 3.6M12 17v.01"/></svg> What to paste</button>
       </div>
       <div class="how" id="how" hidden>
         <b>URL:</b> just your app's web address. <b>Config:</b> Firebase console → ⚙ Project settings → Your apps → Config, or your Supabase <code>createClient(url, anonKey)</code> line.
@@ -57,21 +58,7 @@
 
   <!-- ============ SCANNING ============ -->
   <section class="screen" id="scr-scanning">
-    <div class="radar">
-      <div class="rr r1"></div><div class="rr r2"></div><div class="rr r3"></div>
-      <div class="sweep"></div>
-      <i class="bl b1"></i><i class="bl b2"></i><i class="bl b3"></i>
-      <svg viewBox="0 0 24 24"><path d="M12 2 4 5v6c0 5 3.4 9.4 8 11 4.6-1.6 8-6 8-11V5l-8-3Z"/></svg>
-    </div>
-    <h2 class="scan-title">Scanning <span id="scanProject">…</span></h2>
-    <ul class="steps" id="steps">
-      <li data-k="0">Firestore read access</li>
-      <li data-k="1">Firestore write access</li>
-      <li data-k="2">Realtime Database</li>
-      <li data-k="3">Storage bucket</li>
-      <li data-k="4">Authentication</li>
-      <li data-k="5">API key restrictions</li>
-    </ul>
+    <div id="scanMount"></div>
   </section>
 
   <!-- ============ RESULT ============ -->
@@ -93,7 +80,7 @@
       <label class="lbl" for="keyInp">Have a license key?</label>
       <div class="row">
         <input id="keyInp" class="inp mono" type="text" placeholder="VG-XXXX-XXXX-XXXX" autocomplete="off" />
-        <button class="chip-btn solid" id="keySave">Save</button>
+        <button class="chip-btn solid rp" id="keySave">Save</button>
       </div>
       <p class="fine left">Keys bought on the website work here too.</p>
     </div>
@@ -106,9 +93,10 @@
     <button class="tab" data-tab="key"><svg viewBox="0 0 24 24"><circle cx="8" cy="15" r="4"/><path d="m11 12 9-9M17 6l3 3"/></svg><span>Access</span></button>
   </nav>
 
-  <button class="page-btn" id="pageBtn" hidden></button>
+  <button class="page-btn rp shine" id="pageBtn" hidden></button>
   <div class="toast" id="toast"></div>
 
+  <script src="/motion.js"></script>
   <script src="/pay.js"></script>
   <script src="/tg/tg.js"></script>
 </body>

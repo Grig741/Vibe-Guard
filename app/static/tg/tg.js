@@ -20,6 +20,14 @@
   let current = null;      // scan on the result screen
   let tab = "scan";
   let mode = "url";
+  const ICO = {
+    shield: '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2 4 5v6c0 5 3.4 9.4 8 11 4.6-1.6 8-6 8-11V5l-8-3Z"/></svg>',
+    ok: '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2 4 5v6c0 5 3.4 9.4 8 11 4.6-1.6 8-6 8-11V5l-8-3Z"/><path d="m8.5 12 2.4 2.4L16 9.3"/></svg>',
+    lock: '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>',
+    unlock: '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 7.7-1.5"/></svg>',
+    info: '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 7.5v.01"/></svg>',
+    chev: '<svg class="chev ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>',
+  };
   const URL_RE = /^(https?:\/\/)?([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,24}(:\d{2,5})?([/?#]\S*)?$/i;
 
   /* ---------------- Telegram setup ---------------- */
@@ -145,7 +153,12 @@
   }
   // → { kind:"url", url } | { kind:"config", config } | { kind:"raw", raw } | null
   function checkConfig() {
-    const el = $("#parse");
+    const el = $("#parse"), before = el.className;
+    const r = parseInput(el);
+    if (el.className !== before && el.textContent) VGMotion.flash(el);
+    return r;
+  }
+  function parseInput(el) {
     const raw = $("#cfg").value.trim();
     if (!raw) { el.textContent = ""; el.className = "parse"; return null; }
     const tok = raw.split(/\s+/)[0];
@@ -169,9 +182,11 @@
     el.className = "parse err";
     return null;
   }
+  const tabInd = VGMotion.tabIndicator($("#modeTabs"), ".mode-tab");
   function setMode(m) {
     mode = m;
     $$("#modeTabs .mode-tab").forEach((b) => b.classList.toggle("active", b.dataset.mode === m));
+    tabInd.update();
     const lbl = $("#cfgLbl"), hint = $("#cfgHint"), cfg = $("#cfg");
     if (m === "url") { lbl.firstChild.textContent = "Website URL "; hint.textContent = "your app's live address"; cfg.placeholder = "https://my-app.netlify.app"; }
     else { lbl.firstChild.textContent = "Firebase / Supabase config "; hint.textContent = "paste from your app"; cfg.placeholder = 'firebaseConfig = { apiKey:"AIza…", projectId:"my-app" }\n— or —\ncreateClient("https://xxx.supabase.co","eyJ…")'; }
@@ -200,10 +215,12 @@
     show("scanning");
     primary.hide();
     setBack(null);
-    $("#scanProject").textContent = target.kind === "config" ? target.config.projectId
-      : (target.url || "your app").replace(/^https?:\/\//, "");
-    const steps = $$("#steps li");
-    steps.forEach((s) => s.className = "");
+    const label = target.kind === "config" ? target.config.projectId
+      : target.kind === "raw" ? "Supabase project" : (target.url || "your app").replace(/^https?:\/\//, "").replace(/\/$/, "");
+    const kind = target.kind === "config" ? "firebase" : target.kind === "raw" ? "supabase" : "url";
+    const mount = $("#scanMount");
+    mount.innerHTML = "";
+    const live = VGMotion.scanLog(mount, kind, label, { compact: true, onStep: () => haptic.soft() });
 
     let done = false, result = null, error = null;
     const body = { label: $("#label").value.trim() || null, authorized: !!($("#ownCheck") && $("#ownCheck").checked) };
@@ -225,16 +242,15 @@
       .then((r) => { result = r; }, (e) => { error = e; })
       .finally(() => { done = true; });
 
-    // Animate the checklist while the real scan runs (min ~2.4s so it reads well).
-    for (let i = 0; i < steps.length; i++) {
-      steps[i].className = "run";
-      await sleep(done ? 120 : 420);
-      steps[i].className = "done";
-      haptic.soft();
-    }
-    await req;
+    // Keep the live log on screen for at least ~1.8s so it reads well.
+    await Promise.all([req, sleep(1800)]);
 
-    if (error) { haptic.err(); toast("Scan failed: " + error.message, true); goTab("scan"); return; }
+    if (error) {
+      live.fail(); haptic.err(); toast("Scan failed: " + error.message, true);
+      await sleep(900); live.destroy(); goTab("scan"); return;
+    }
+    await live.finish();
+    live.destroy();
     if (!inTG) addLocalId(result.id);
     if (result.locked) haptic.warn(); else haptic.ok();
     if (!result.locked && inTG) refreshMe();
@@ -258,31 +274,33 @@
 
     let html = `
       <div class="r-top">
-        <div class="gauge">
+        <div class="gauge" style="--orbit:${color}">
+          <div class="gauge-orbit"></div>
           <svg width="112" height="112" viewBox="0 0 112 112">
             <circle class="g-track" cx="56" cy="56" r="${R}"/>
             <circle class="g-fill" cx="56" cy="56" r="${R}" stroke="${color}" stroke-dasharray="${C}" stroke-dashoffset="${C}" data-off="${C * (1 - s.score / 100)}"/>
           </svg>
-          <div class="g-center"><div class="g-grade" style="color:${color}">${s.grade}</div><div class="g-score">${s.score}/100</div></div>
+          <div class="g-center"><div class="g-grade" style="color:${color}" data-grade="${s.grade}">${s.grade}</div><div class="g-score"><span data-count="${s.score}">${s.score}</span>/100</div></div>
         </div>
         <div class="r-head">
           <div class="r-proj">${esc(s.project_id)}</div>
           <div class="r-title">${esc(s.target_label || "Security report")}</div>
           <div class="r-verdict">${verdict(s)}</div>
-          ${(s.stack && s.stack.length) ? `<div class="stack-row">${s.stack.map((t) => `<span class="stack-badge">${esc(t)}</span>`).join("")}</div>` : ""}
+          ${(s.stack && s.stack.length) ? `<div class="stack-row">${s.stack.map((t, i) => `<span class="stack-badge mv-pop" style="--d:${500 + i * 90}ms">${esc(t)}</span>`).join("")}</div>` : ""}
         </div>
       </div>
       <div class="sev-row">
-        <div class="sev c"><b>${s.critical}</b><small>Crit</small></div>
-        <div class="sev h"><b>${s.high}</b><small>High</small></div>
-        <div class="sev m"><b>${s.medium}</b><small>Med</small></div>
-        <div class="sev l"><b>${s.low}</b><small>Low</small></div>
-        <div class="sev p"><b>${s.passed}</b><small>Pass</small></div>
+        <div class="sev c"><b data-count="${s.critical}">${s.critical}</b><small>Crit</small></div>
+        <div class="sev h"><b data-count="${s.high}">${s.high}</b><small>High</small></div>
+        <div class="sev m"><b data-count="${s.medium}">${s.medium}</b><small>Med</small></div>
+        <div class="sev l"><b data-count="${s.low}">${s.low}</b><small>Low</small></div>
+        <div class="sev p"><b data-count="${s.passed}">${s.passed}</b><small>Pass</small></div>
       </div>
-      ${s.active_skipped ? `<div class="active-note">ℹ️ ${s.active_skipped} write/sign-up test${s.active_skipped === 1 ? "" : "s"} didn't run. Tick <b>“This is my project”</b> and scan again for the full check.</div>` : ""}`;
+      ${s.active_skipped ? `<div class="active-note mv">${ICO.info}<span>${s.active_skipped} write/sign-up test${s.active_skipped === 1 ? "" : "s"} didn't run. Tick <b>“This is my project”</b> and scan again for the full check.</span></div>` : ""}`;
 
     html += s.locked ? lockedHTML(s) : fullHTML(s);
     $("#result").innerHTML = html;
+    VGMotion.revealReport($("#result"));
 
     requestAnimationFrame(() => requestAnimationFrame(() => {
       const g = $("#result .g-fill"); if (g) g.style.strokeDashoffset = g.dataset.off;
@@ -321,14 +339,14 @@
     const sevs = [];
     ["critical", "high", "medium", "low"].forEach((k) => { for (let i = 0; i < s[k]; i++) sevs.push(k); });
     const fakes = sevs.slice(0, 3).map((k, i) => `
-      <div class="f ${k}"><div class="f-h"><span class="badge ${k}">${SEV[k]}</span><span class="f-t"><span class="fake" style="width:${[70, 55, 62][i]}%"></span></span></div></div>`).join("");
+      <div class="f ${k}"><div class="f-h"><span class="badge ${k}">${SEV[k]}</span><span class="f-t"><span class="fake fake-shimmer" style="width:${[70, 55, 62][i]}%"></span></span></div></div>`).join("");
     return `
-      <div class="lock-hero"><div class="lock-n ${cls}" id="lockN">0</div>
+      <div class="lock-hero"><div class="lock-n ${cls}${s.critical ? " shake-on-reveal" : ""}" data-count="${n}">${n}</div>
         <div class="lock-l">security hole${n === 1 ? "" : "s"} in your project</div>
         <div class="lock-s">Which ones, and how to fix them, is in the full report.</div></div>
       <div class="blur-list">${fakes}</div>
-      <div class="paywall">
-        <h3>🔓 See every hole and how to close it</h3>
+      <div class="paywall shine">
+        <h3>${ICO.unlock} See every hole and how to close it</h3>
         <ul>
           <li>What each hole is and what an attacker can do</li>
           <li>Proof: the exact request that got through</li>
@@ -356,20 +374,10 @@
         ${f.status === "vulnerable" && f.remediation ? `<div class="fix-h"><b>How to fix</b><button class="copy">Copy</button></div><pre>${esc(f.remediation)}</pre>` : ""}
       </div></div>` : "";
     return `<div class="f ${f.severity}" style="animation-delay:${i * 50}ms">
-      <div class="f-h"><span class="badge ${f.severity}">${SEV[f.severity] || f.severity}</span><span class="f-t">${esc(f.title)}</span>${detail ? '<span class="chev">▶</span>' : ""}</div>
+      <div class="f-h"><span class="badge ${f.severity}">${SEV[f.severity] || f.severity}</span><span class="f-t">${esc(f.title)}</span>${detail ? ICO.chev : ""}</div>
       ${body}</div>`;
   }
 
-  // Count-up for the locked number (runs after render)
-  const mo = new MutationObserver(() => {
-    const el = $("#lockN");
-    if (!el || el.dataset.done || !current) return;
-    el.dataset.done = "1";
-    const to = current.issues, t0 = performance.now();
-    const step = (t) => { const k = Math.min(1, (t - t0) / 900); el.textContent = Math.round(to * (1 - Math.pow(1 - k, 3))); if (k < 1) requestAnimationFrame(step); };
-    requestAnimationFrame(step);
-  });
-  mo.observe($("#result"), { childList: true });
 
   /* ---------------- Payment ---------------- */
   function payCtx(s) {
@@ -394,7 +402,7 @@
       haptic.ok();
       await refreshMe();
       showResult(s);
-      toast("Full report unlocked 🔓");
+      toast("Full report unlocked");
     } catch (e) {
       primary.loading(false);
       haptic.err();
@@ -440,7 +448,7 @@
     for (let i = 0; i < 25; i++) {
       try {
         const s = await api("/api/scans/" + id);
-        if (!s.locked) { primary.loading(false); refreshMe(); showResult(s); toast("Full report unlocked 🔓"); return; }
+        if (!s.locked) { primary.loading(false); refreshMe(); showResult(s); toast("Full report unlocked"); return; }
       } catch (_) {}
       await sleep(1000);
     }
@@ -458,7 +466,7 @@
       else scans = (await Promise.all(localIds().map((id) => api("/api/scans/" + id).catch(() => null)))).filter(Boolean);
     } catch (_) {}
     if (!scans.length) {
-      ul.innerHTML = `<div class="empty"><b>🛡</b>No scans yet.<br/>Run your first one from the Scan tab.</div>`;
+      ul.innerHTML = `<div class="empty mv"><b class="empty-ico">${ICO.shield}</b>No scans yet.<br/>Run your first one from the Scan tab.</div>`;
       return;
     }
     ul.innerHTML = scans.map((s, i) => {
@@ -466,7 +474,7 @@
       return `<li data-id="${s.id}" style="animation-delay:${i * 40}ms">
         <div class="h-g" style="color:${GRADE[s.grade] || "var(--info)"}">${s.grade}</div>
         <div class="h-i"><div class="h-n">${esc(s.target_label || s.project_id)}</div><div class="h-m">${s.issues} holes · ${t}</div></div>
-        <span class="h-lock">${!s.issues ? "✅" : s.locked ? "🔒" : "🔓"}</span></li>`;
+        <span class="h-lock ${!s.issues ? "is-ok" : s.locked ? "is-locked" : "is-open"}">${!s.issues ? ICO.ok : s.locked ? ICO.lock : ICO.unlock}</span></li>`;
     }).join("");
     const byId = Object.fromEntries(scans.map((s) => [s.id, s]));
     $$("#hist li[data-id]").forEach((li) => li.addEventListener("click", () => { haptic.tap(); showResult(byId[li.dataset.id]); }));
@@ -496,7 +504,7 @@
       requestAnimationFrame(() => requestAnimationFrame(() => { const i = $(".key-card .bar i"); if (i) i.style.width = pct + "%"; }));
       $("#copyKey").addEventListener("click", () => copyText(lic.key));
     } else {
-      box.innerHTML = `<div class="no-key"><b>🔒</b>No active access.<br/>Unlock any report to get ${pricing.pack_scans} full scans${inTG ? ` for ⭐ ${pricing.stars}` : ""}.</div>`;
+      box.innerHTML = `<div class="no-key mv"><b class="empty-ico">${ICO.lock}</b>No active access.<br/>Unlock any report to get ${pricing.pack_scans} full scans${inTG ? ` for ${pricing.stars} Stars` : ""}.</div>`;
     }
   }
 

@@ -237,3 +237,29 @@ textarea:focus, .inp:focus { outline: none; border-color: var(--accent); box-sha
 .own-check input{margin-top:2px;width:16px;height:16px;accent-color:#5eead4;flex:none}
 .own-check b{color:#e6f1f5}
 .active-note{margin:12px 0 4px;padding:10px 12px;border-radius:12px;background:rgba(251,191,36,.08);border:1px solid rgba(251,191,36,.25);color:#f5d68a;font-size:12.5px;line-height:1.45}
+
+/* =================== Motion layer (Mini App) =================== */
+.checks-mini span { animation: mvIn .6s var(--out-expo) backwards; }
+.checks-mini span:nth-child(1) { animation-delay: .35s; } .checks-mini span:nth-child(2) { animation-delay: .42s; }
+.checks-mini span:nth-child(3) { animation-delay: .49s; } .checks-mini span:nth-child(4) { animation-delay: .56s; }
+.checks-mini span:nth-child(5) { animation-delay: .63s; }
+.checks-mini span:nth-child(odd) { animation: mvIn .6s var(--out-expo) backwards, floatY 4.5s ease-in-out infinite 1s; }
+@keyframes floatY { 50% { transform: translateY(-3px); } }
+.mode-tab { gap: 6px; }
+.chip-btn { display: inline-flex; align-items: center; gap: 6px; }
+.empty .empty-ico, .no-key .empty-ico { display: grid; place-items: center; margin: 0 auto 10px; width: 56px; height: 56px; border-radius: 18px;
+  color: var(--accent); background: rgba(94,234,212,.08); border: 1px solid rgba(94,234,212,.2); font-size: 26px; animation: floatY 3.5s ease-in-out infinite; }
+.h-lock { display: grid; place-items: center; font-size: 17px; }
+.h-lock.is-ok { color: var(--ok); } .h-lock.is-locked { color: var(--high); } .h-lock.is-open { color: var(--accent); }
+.paywall h3 { display: flex; align-items: center; gap: 8px; }
+.paywall h3 .ico { color: var(--accent); }
+.chev { transition: transform .4s var(--spring); }
+.f-h { transition: background .2s; } .f-h:active { background: rgba(255,255,255,.03); }
+.active-note { display: flex; gap: 9px; align-items: flex-start; animation-delay: .35s; }
+.active-note .ico { color: #f5c451; margin-top: 2px; }
+.sev { transition: transform .35s var(--spring); } .sev:active { transform: scale(.94); }
+.tab.active svg { animation: tabPop .45s var(--spring); }
+@keyframes tabPop { 40% { transform: translateY(-4px) scale(1.2); } }
+.own-check { transition: border-color .2s, background .25s; }
+.own-check:has(input:checked) { border-color: rgba(94,234,212,.4); background: rgba(94,234,212,.06); }
+.parse.flash { animation: flash .5s var(--out-expo); }
